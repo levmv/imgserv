@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/base64"
 	"fmt"
+	"strings"
 )
 
 type VerifySignatureFunc func(string) (string, error)
@@ -42,10 +43,20 @@ func ST3sign(path string) (string, error) {
 }
 
 func (sig UrlSignature) T3sign(path string) (string, error) {
-	return shortHash(path, sig.Secret, 8, 3), nil
+	sign, realPath, ok := strings.Cut(strings.TrimLeft(path, "/"), "/")
+
+	if ok != true {
+		return path, fmt.Errorf("wrong input %s", path)
+	}
+
+	if sign != shortHash(realPath, sig.Secret, 8, 3) {
+		return path, fmt.Errorf("wrong signature for path %s", path)
+	}
+
+	return realPath, nil
 }
 
 func shortHash(str string, secret string, offset int, size int) string {
 	hash := md5.Sum([]byte(str + secret))
-	return base64.RawURLEncoding.EncodeToString(hash[offset:size])
+	return base64.RawURLEncoding.EncodeToString(hash[offset : offset+size])
 }

@@ -32,6 +32,23 @@ int thumbnail_buffer(void *buf, size_t len, VipsImage **out, int width, int heig
     return vips_thumbnail_buffer(buf, len, out, width, "height", height, "crop", crop, "size", size, NULL);
 }
 
+int resize(VipsImage *in, VipsImage **out, double ratio) {
+    if (!vips_image_hasalpha(in)) {
+        return vips_resize(in, out, ratio);
+    }
+
+    VipsImage *base = vips_image_new();
+    VipsImage **t = (VipsImage **) vips_object_local_array(VIPS_OBJECT(base), 3);
+
+    int res =
+        vips_premultiply(in, &t[0], NULL) ||
+        vips_resize(t[0], &t[1], ratio) ||
+        vips_unpremultiply(t[1], &t[2], NULL) ||
+        vips_cast(t[2], out, in->BandFmt, NULL);
+
+    clear_image(&base);
+    return 0;
+}
 
 int crop(VipsImage *in, VipsImage **out, int x, int y, int width, int height) {
     return vips_extract_area(in, out, x, y, width, height, NULL);

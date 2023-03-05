@@ -17,6 +17,7 @@ int vips_jpegload_go(void *buf, size_t len, VipsImage **out);
 int thumbnail_buffer(void *buf, size_t len, VipsImage **out,int width,int height, int crop, int size);
 
 int thumbnail (VipsImage *in, VipsImage **out, int width, int height, int crop, int size);
+int resize(VipsImage *in, VipsImage **out, double ratio);
 int crop(VipsImage *in, VipsImage **out, int x, int y, int width, int height);
 int jpegsave(VipsImage *in, void **buf, size_t *len, int quality);
 int webpsave(VipsImage *in, void **buf, size_t *len, int quality);

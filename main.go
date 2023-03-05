@@ -188,9 +188,11 @@ func serveImg(w http.ResponseWriter, r *http.Request) (int, error) {
 				wmImage := vips.Image{}
 				defer wmImage.Close()
 
-				// TODO: wm.size
 				if err = wmImage.LoadFromBuffer(wmImg.Data); err != nil {
 					return 500, err
+				}
+				if wm.Size < 100 {
+					wmImage.Resize(float64(wm.Size) / 100)
 				}
 
 				// TODO wm.Position with coords
@@ -205,6 +207,11 @@ func serveImg(w http.ResponseWriter, r *http.Request) (int, error) {
 					wmImage.Embed(0, 0, image.Width(), image.Height())
 				case PositionCenter:
 					wmImage.Embed(image.Width()/2-wmImage.Width()/2, image.Height()/2-wmImage.Height()/2, image.Width(), image.Height())
+				case PositionCoords:
+					x := image.Width() - wmImage.Width() - wm.PositionX
+					y := image.Height() - wmImage.Height() - wm.PositionY
+
+					wmImage.Embed(x, y, image.Width(), image.Height())
 				}
 				if err = image.Composite(&wmImage); err != nil {
 					return 0, err

@@ -18,9 +18,11 @@ type cropParams struct {
 }
 
 type Watermark struct {
-	Path     string       `json:"path"`
-	Position PositionType `json:"position"`
-	Size     int          `json:"size"`
+	Path      string       `json:"path"`
+	Position  PositionType `json:"position"`
+	PositionX int          `json:"position_x,omitempty"`
+	PositionY int          `json:"position_y,omitempty"`
+	Size      int          `json:"size"`
 }
 
 const ModeContain string = "contain"
@@ -38,6 +40,7 @@ const (
 type PositionType string
 
 const (
+	PositionCoords    PositionType = ""
 	PositionNorth     PositionType = "n"
 	PositionNorthEast PositionType = "ne"
 	PositionEast      PositionType = "e"
@@ -174,6 +177,17 @@ func parseParams(inputQuery string) (string, Params, error) {
 			}
 			if len(opts) > 1 {
 				if len(opts[1]) > 2 {
+					wm.Position = PositionCoords
+					coords := strings.Split(opts[1], "x")
+					fmt.Println(coords)
+					wm.PositionX, err = strconv.Atoi(coords[0])
+					if err != nil {
+						return path, params, errors.New("wrong watermark coordinate")
+					}
+					wm.PositionY, err = strconv.Atoi(coords[1])
+					if err != nil {
+						return path, params, errors.New("wrong watermark coordinate")
+					}
 				} else {
 					wm.Position = PositionType(opts[1])
 				}

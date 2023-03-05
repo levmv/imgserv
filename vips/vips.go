@@ -139,6 +139,16 @@ func (img *Image) Close() {
 	}
 }
 
+func (img *Image) Resize(ratio float64) error {
+	var out *C.VipsImage
+	if err := C.resize(img.VipsImage, &out, C.double(ratio)); err != 0 {
+		return handleImageError(out)
+	}
+
+	C.swap_and_clear(&img.VipsImage, out)
+	return nil
+}
+
 func (img *Image) Crop(x int, y int, width int, height int) error {
 	var out *C.VipsImage
 	if err := C.crop(img.VipsImage, &out, C.int(x), C.int(y), C.int(width), C.int(height)); err != 0 {

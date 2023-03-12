@@ -30,4 +30,6 @@ int composite_image(VipsImage *base,  VipsImage *overlay, VipsImage **out);
 
 int flatten_image(VipsImage *in, VipsImage **out, double r, double g, double b);
 
+int label(VipsImage *in, VipsImage **out, const char *text, const char *font, const char *font_file, double r, double g, double b, int x, int y, int width, int height);
+
 void vips_cleanup();

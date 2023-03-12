@@ -288,6 +288,33 @@ func (img *Image) ThumbnailFromBuffer(buf []byte, width int, height int, crop In
 	return nil
 }
 
+func (img *Image) Label(text string, font string, fontFile string, color Color, vpad int, hpad int) error {
+	var tmp *C.VipsImage
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	f := C.CString(font)
+	defer C.free(unsafe.Pointer(f))
+
+	ff := C.CString(fontFile)
+	defer C.free(unsafe.Pointer(ff))
+
+	hPadding := img.Width() / 100 * hpad
+	vPadding := img.Height() / 100 * vpad
+	width := img.Width() - hPadding*2
+	height := img.Height() - vPadding*2
+
+	if err := C.label(img.VipsImage, &tmp, cText, f, ff, C.double(color.R), C.double(color.G), C.double(color.B),
+		C.int(hPadding), C.int(vPadding), C.int(width), C.int(height)); err != 0 {
+		return handleImageError(tmp)
+	}
+
+	C.swap_and_clear(&img.VipsImage, tmp)
+
+	return nil
+}
+
 func Cleanup() {
 	C.vips_cleanup()
 }

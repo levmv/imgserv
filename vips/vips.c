@@ -143,6 +143,52 @@ int composite_image(VipsImage *base, VipsImage *overlay, VipsImage **out) {
 }
 
 
+// TODO: maybe use struct for params?
+int label(VipsImage *in, VipsImage **out, const char *text, const char *font, const char *font_file, double r, double g, double b, int x, int y, int width, int height) {
+
+    double color[3] = { r, g, b };
+    static double ones[3] = { 1, 1, 1 };
+    VipsObject *base = (VipsObject *) vips_image_new();
+
+    VipsImage **t = (VipsImage **) vips_object_local_array( VIPS_OBJECT( base ), 10 );
+
+    if (vips_text(&t[0], text,
+     "font", font,
+     "fontfile", font_file,
+     "width", width,
+            "height", height, NULL) ||
+         vips_linear1(t[0], &t[1], /* opacity*/1, 0.0, NULL) ||
+         vips_cast(t[1], &t[2], VIPS_FORMAT_UCHAR, NULL) ||
+         vips_embed(t[2], &t[3], x, y, t[2]->Xsize + x,
+                    t[2]->Ysize + y, NULL)) {
+       g_object_unref(base);
+       return 1;
+     }
+
+    /* Make the constant image to paint the text with. We make a 1x1
+     * black image, then add the colour and cast it to match in. Then
+     * expand it to match in in size.
+     */
+    if (vips_black(&t[4], 1, 1, NULL) ||
+          vips_linear(t[4], &t[5], ones, color, 3, NULL) ||
+          vips_cast(t[5], &t[6], VIPS_FORMAT_UCHAR, NULL) ||
+          vips_copy(t[6], &t[7], "interpretation", in->Type, NULL) ||
+          vips_embed(t[7], &t[8], 0, 0, in->Xsize, in->Ysize, "extend",
+                     VIPS_EXTEND_COPY, NULL)) {
+        g_object_unref(base);
+        return 1;
+      }
+
+    if (vips_ifthenelse(t[3], t[8], in, out, "blend", TRUE, NULL)) {
+        g_object_unref(base);
+        return 1;
+      }
+
+    g_object_unref(base);
+    return 0;
+}
+
+
 void vips_cleanup() {
     vips_error_clear();
     vips_thread_shutdown();

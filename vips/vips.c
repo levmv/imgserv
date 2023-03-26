@@ -145,47 +145,54 @@ int composite_image(VipsImage *base, VipsImage *overlay, VipsImage **out) {
 
 // TODO: maybe use struct for params?
 int label(VipsImage *in, VipsImage **out, const char *text, const char *font, const char *font_file, double r, double g, double b, int x, int y, int width, int height) {
-
+    double black[3] = {0, 0, 0};
     double color[3] = { r, g, b };
-    static double ones[3] = { 1, 1, 1 };
     VipsObject *base = (VipsObject *) vips_image_new();
+    VipsImage **t = (VipsImage **) vips_object_local_array( VIPS_OBJECT( base ), 12 );
 
-    VipsImage **t = (VipsImage **) vips_object_local_array( VIPS_OBJECT( base ), 10 );
-
-    if (vips_text(&t[0], text,
-     "font", font,
-     "fontfile", font_file,
-     "width", width,
-            "height", height, NULL) ||
-         vips_linear1(t[0], &t[1], /* opacity*/1, 0.0, NULL) ||
-         vips_cast(t[1], &t[2], VIPS_FORMAT_UCHAR, NULL) ||
-         vips_embed(t[2], &t[3], x, y, t[2]->Xsize + x,
-                    t[2]->Ysize + y, NULL)) {
-       g_object_unref(base);
-       return 1;
-     }
-
-    /* Make the constant image to paint the text with. We make a 1x1
-     * black image, then add the colour and cast it to match in. Then
-     * expand it to match in in size.
-     */
-    if (vips_black(&t[4], 1, 1, NULL) ||
-          vips_linear(t[4], &t[5], ones, color, 3, NULL) ||
-          vips_cast(t[5], &t[6], VIPS_FORMAT_UCHAR, NULL) ||
-          vips_copy(t[6], &t[7], "interpretation", in->Type, NULL) ||
-          vips_embed(t[7], &t[8], 0, 0, in->Xsize, in->Ysize, "extend",
-                     VIPS_EXTEND_COPY, NULL)) {
-        g_object_unref(base);
-        return 1;
-      }
-
-    if (vips_ifthenelse(t[3], t[8], in, out, "blend", TRUE, NULL)) {
-        g_object_unref(base);
-        return 1;
-      }
+    int result = vips_text(&t[0], text, "font", font, "fontfile", font_file, "width", width, "height", height, NULL) ||
+         vips_embed(t[0], &t[1], x, y, in->Xsize, in->Ysize, NULL) || // text mask
+         NULL == (t[2] = vips_image_new_from_image(in, color, 3)) || // constant image with text color
+         NULL == (t[3] = vips_image_new_from_image(in, black, 3)) || // .. with shadow color
+         vips_bandjoin2(t[2], t[1], &t[4], NULL) || // text mask as alpha
+         vips_bandjoin2(t[3], t[1], &t[5], NULL) ||
+         vips_gaussblur(t[5], &t[6], 4, NULL) ||
+         vips_composite2(in, t[6], &t[7], VIPS_BLEND_MODE_OVER, "compositing_space", in->Type, NULL) ||
+         vips_composite2(t[7], t[4], out, VIPS_BLEND_MODE_OVER, "compositing_space", in->Type, NULL);
 
     g_object_unref(base);
-    return 0;
+    return result;
+}
+
+int linear(VipsImage *in, VipsImage **out, double multiple, double add) {
+    return vips_linear1(in, out, multiple, add, NULL);
+}
+
+int strip(VipsImage *in, VipsImage **out) {
+  static double default_resolution = 72.0 / 25.4;
+
+  if (vips_copy(in, out,
+    "xres", default_resolution,
+    "yres", default_resolution,
+    NULL
+  )) return 1;
+
+  gchar **fields = vips_image_get_fields(in);
+
+  for (int i = 0; fields[i] != NULL; i++) {
+    gchar *name = fields[i];
+
+    if (
+      (strcmp(name, VIPS_META_ICC_NAME) == 0) ||
+      (strcmp(name, "palette-bit-depth") == 0)
+    ) continue;
+
+    vips_image_remove(*out, name);
+  }
+
+  g_strfreev(fields);
+
+  return 0;
 }
 
 

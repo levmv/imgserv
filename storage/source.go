@@ -1,54 +1,26 @@
-package main
+package storage
 
 import (
-	"errors"
 	"io"
 	"sync"
 )
 
 type SourceImage struct {
 	Data []byte
+	pool *sync.Pool
 	io.Closer
-}
-
-var sourcePool sync.Pool
-
-func initSourcePool() {
-	sourcePool = sync.Pool{
-		New: func() interface{} {
-			return make([]byte, 1024)
-		},
-	}
-}
-
-func NewSourceImage() SourceImage {
-	return SourceImage{
-		Data: sourcePool.Get().([]byte),
-	}
 }
 
 func (si *SourceImage) Close() {
 	//si.Reset()
 	if cap(si.Data) < 3*1024*1024 {
-		sourcePool.Put(si.Data)
+		si.pool.Put(si.Data)
 	}
 }
 
-func LoadFromStorage(path string) (SourceImage, error) {
-	si := SourceImage{
-		Data: sourcePool.Get().([]byte),
-	}
-
-	err := storage.GetFile(path, &si)
-	if err != nil {
-		return si, err
-	}
-
-	if len(si.Data) == 0 {
-		return si, errors.New("empty input file")
-	}
-
-	return si, nil
+func (si *SourceImage) Read(b []byte) (n int, err error) {
+	b = si.Data[:len(b)]
+	return len(si.Data), nil
 }
 
 func (si *SourceImage) ReadFrom(r io.Reader) (n int64, err error) {

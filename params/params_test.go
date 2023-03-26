@@ -1,4 +1,4 @@
-package main
+package params
 
 import (
 	"encoding/json"
@@ -8,7 +8,7 @@ import (
 
 func TestParseParams(t *testing.T) {
 
-	if err := parsePresets(`{"sq":{"resize": true, "mode":"crop", "width":100,"height":100,"quality":90}}`); err != nil {
+	if err := InitPresets(`{"sq":{"resize": true, "mode":"crop", "width":100,"height":100,"quality":90}}`); err != nil {
 		t.Error("failed to parse presets")
 	}
 
@@ -46,7 +46,7 @@ func TestParseParams(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(fmt.Sprintf("test%v", i), func(t *testing.T) {
-			path, params, err := parseParams(tt.input)
+			path, params, err := Parse(tt.input)
 			if err != nil {
 				t.Errorf("parsing failed for %v with %v", tt.input, err)
 			}

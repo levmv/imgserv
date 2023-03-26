@@ -34,6 +34,7 @@ func none(path string) (string, error) {
 }
 
 // ST3sign used for legacy signatures as first part of path. Just dropping that part (it's already verified by nginx)
+// Mostly unused now, as we fixed almost every nginx config to proxy_pass only needed part
 func ST3sign(path string) (string, error) {
 	if len(path) < 25 {
 		return path, fmt.Errorf("too short path: %s", path)
@@ -42,6 +43,7 @@ func ST3sign(path string) (string, error) {
 	return path[25:], nil
 }
 
+// T3sign also legacy. Used in the project of the same name only.
 func (sig UrlSignature) T3sign(path string) (string, error) {
 	sign, realPath, ok := strings.Cut(strings.TrimLeft(path, "/"), "/")
 

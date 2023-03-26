@@ -94,7 +94,7 @@ func Init(conf *Config) error {
 	if conf == nil {
 		conf = &Config{
 			ConcurrencyLevel: 1,
-			ReportLeaks:      false,
+			ReportLeaks:      true,
 		}
 	}
 
@@ -104,6 +104,7 @@ func Init(conf *Config) error {
 	if conf.ReportLeaks {
 		C.vips_leak_set(C.gboolean(1))
 	}
+	//C.vips_cache_set_trace(C.gboolean(1))
 	C.vips_cache_set_max_mem(0)
 	C.vips_cache_set_max(0)
 
@@ -217,6 +218,17 @@ func (img *Image) Composite(overlay *Image) error {
 	return nil
 }
 
+func (img *Image) Strip() error {
+	var out *C.VipsImage
+
+	if err := C.strip(img.VipsImage, &out); err != 0 {
+		return handleImageError(out)
+	}
+	C.swap_and_clear(&img.VipsImage, out)
+
+	return nil
+}
+
 func (img *Image) ExportJpeg(quality int) ([]byte, error) {
 
 	defer C.g_object_unref(C.gpointer(img.VipsImage))
@@ -315,6 +327,15 @@ func (img *Image) Label(text string, font string, fontFile string, color Color, 
 	return nil
 }
 
+func (img *Image) Linear(multiply float32, add float32) error {
+	var out *C.VipsImage
+	if err := C.linear(img.VipsImage, &out, C.double(multiply), C.double(add)); err != 0 {
+		return handleImageError(out)
+	}
+	C.swap_and_clear(&img.VipsImage, out)
+	return nil
+}
+
 func Cleanup() {
 	C.vips_cleanup()
 }
@@ -328,10 +349,10 @@ func handleImageError(out *C.VipsImage) error {
 }
 
 func handleVipsError() error {
-	s := C.GoString(C.vips_error_buffer())
-	C.vips_error_clear()
+	defer C.vips_error_clear()
 
-	return fmt.Errorf("%v\nStack:\n%s", s, dbg.Stack())
+	s := C.GoString(C.vips_error_buffer())
+	return fmt.Errorf("%v \nStack:\n%s", s, dbg.Stack())
 }
 
 func ReadVipsMemStats(stats *MemoryStats) {

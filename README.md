@@ -1,20 +1,19 @@
-# go-resizer
-### Drop-in (almost) replacement for [php-resizer](https://github.com/levmv/php-resizer).
+# image server 
 
-Somewhat sloppy and crude Go implementation of php-resizer. Support all usable features of php version (and for legacy reasons it's reimplements all strange things as well).
+Simple image server to preprocess and store images (in s3-compatible storages) and to fetch that images with resizing
+them on the fly. Also, it can generate social share images.
 
+So it is logical evolution of go-resizer to encapsulate all image-related processing 
+in one service.
 
-TODO:
-- fix multiple watermarks and wm position feature
-- text processing and filters
-- adequate caching
+Resizer-part is almost drop-in replacement for `php-resizer` (so it's reimplements all strange things as well).
 
+Note: it's basically my first time code in golang, so, code quality is not good :)
 
-### setup
+### Service setup
 
-Copy and edit `go-resizer.service` to `/etc/systemd/system/go-resizer.service`
-
-Install it with `sudo systemctl enable go-resizer --now`
+Copy and edit `imgserv.service` to `/etc/systemd/system/imgserv.service`
+Install it with `sudo systemctl enable imgserv --now`
 
 
 

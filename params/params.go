@@ -1,10 +1,10 @@
-package main
+package params
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/levmv/go-resizer/vips"
+	"github.com/levmv/imgserv/vips"
 	"net/url"
 	"strconv"
 	"strings"
@@ -20,8 +20,8 @@ type cropParams struct {
 type Watermark struct {
 	Path      string       `json:"path"`
 	Position  PositionType `json:"position"`
-	PositionX int          `json:"position_x,omitempty"`
-	PositionY int          `json:"position_y,omitempty"`
+	PositionX int          `json:"position_x"`
+	PositionY int          `json:"position_y"`
 	Size      int          `json:"size"`
 }
 
@@ -70,12 +70,14 @@ func defaultParams() Params {
 	params.Quality = 80
 	params.Upscale = false
 	params.Gravity = GravityNone
+	params.PixelRatio = 1
 	return params
 }
 
 var presets map[string]Params
 
-func parsePresets(strPresets string) error {
+// InitPresets parse presets json config and save info to use when parsing urls
+func InitPresets(strPresets string) error {
 	var tmp map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(strPresets), &tmp); err != nil {
 		return fmt.Errorf("can't parse presets (%w)", err)
@@ -91,9 +93,10 @@ func parsePresets(strPresets string) error {
 	return nil
 }
 
-func parseParams(inputQuery string) (string, Params, error) {
+func Parse(inputQuery string) (string, Params, error) {
 
 	params := defaultParams()
+	var exist bool
 
 	paramsPart, path, found := strings.Cut(strings.Trim(inputQuery, "/"), "/")
 	if found == false {
@@ -179,7 +182,6 @@ func parseParams(inputQuery string) (string, Params, error) {
 				if len(opts[1]) > 2 {
 					wm.Position = PositionCoords
 					coords := strings.Split(opts[1], "x")
-					fmt.Println(coords)
 					wm.PositionX, err = strconv.Atoi(coords[0])
 					if err != nil {
 						return path, params, errors.New("wrong watermark coordinate")
@@ -197,7 +199,10 @@ func parseParams(inputQuery string) (string, Params, error) {
 		case "p":
 			params.PixelRatio, _ = strconv.ParseFloat(value, 64)
 		case "_":
-			params = presets[value]
+			params, exist = presets[value]
+			if exist == false {
+				return path, params, errors.New("unknown preset " + value)
+			}
 		case "n":
 		default:
 			return path, params, errors.New("unsupported param " + name)

@@ -3,13 +3,15 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/levmv/imgserv/params"
-	"github.com/levmv/imgserv/storage"
-	"github.com/levmv/imgserv/vips"
 	"net/http"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/levmv/imgserv/config"
+	"github.com/levmv/imgserv/params"
+	"github.com/levmv/imgserv/storage"
+	"github.com/levmv/imgserv/vips"
 )
 
 func serveImg(w http.ResponseWriter, r *http.Request) (int, error) {
@@ -158,24 +160,36 @@ func serveImg(w http.ResponseWriter, r *http.Request) (int, error) {
 
 	var imageBytes []byte
 
-	if strings.Contains(r.Header.Get("Accept"), "webp") {
-		imageBytes, err = image.ExportWebp(pms.Quality + cfg.Resizer.WebpQCorrection)
-		if err != nil {
-			return 500, err
-		}
+	exportWebp := func() ([]byte, error) {
 		w.Header().Set("Content-Type", "image/webp")
-	} else {
-		imageBytes, err = image.ExportJpeg(pms.Quality)
-		if err != nil {
-			return 500, err
-		}
-		w.Header().Set("Content-Type", "image/jpeg")
+		return image.ExportWebp(pms.Quality + cfg.Resizer.WebpQCorrection)
 	}
-	w.Header().Set("Vary", "Accept")
+	exportJpeg := func() ([]byte, error) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		return image.ExportJpeg(pms.Quality + cfg.Resizer.JpegQCorrection)
+	}
+
+	if cfg.Resizer.OutputType == config.OutputTypeVary {
+		w.Header().Set("Vary", "Accept")
+		if strings.Contains(r.Header.Get("Accept"), "webp") {
+			imageBytes, err = exportWebp()
+		} else {
+			imageBytes, err = exportJpeg()
+		}
+	} else if cfg.Resizer.OutputType == config.OutputTypeWebp {
+		imageBytes, err = exportWebp()
+	} else {
+		imageBytes, err = exportJpeg()
+	}
+
+	if err != nil {
+		return 500, err
+	}
+
 	w.Header().Set("Content-Length", strconv.Itoa(len(imageBytes)))
 	_, err = w.Write(imageBytes)
 
-	return 200, nil
+	return 200, err
 }
 
 func addWatermark(image *vips.Image, wmImg *storage.SourceImage, wm params.Watermark, pixelRatio float64) error {

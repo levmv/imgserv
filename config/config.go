@@ -26,11 +26,19 @@ type StorageConf struct {
 	MaxHeight   int    `json:"max_height"`
 }
 
+type OutputFormat string
+
+const OutputTypeVary OutputFormat = "vary"
+const OutputTypeJpeg OutputFormat = "jpeg"
+const OutputTypeWebp OutputFormat = "webp"
+
 type ResizerConf struct {
 	SignatureMethod string          `json:"signature_method"`
 	SignatureSecret string          `json:"signature_secret"`
 	Presets         json.RawMessage `json:"presets"`
+	OutputType      OutputFormat    `json:"output_format"`
 	WebpQCorrection int             `json:"webp_q_correction"`
+	JpegQCorrection int             `json:"jpeg_q_correction"`
 }
 
 type SharerConf struct {
@@ -57,6 +65,8 @@ func Parse(configFile string) (*Config, error) {
 		},
 		Resizer: ResizerConf{
 			WebpQCorrection: -2,
+			JpegQCorrection: 0,
+			OutputType:      OutputTypeVary,
 		},
 	}
 

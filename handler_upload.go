@@ -5,12 +5,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/levmv/imgserv/config"
-	"github.com/levmv/imgserv/vips"
 	"io"
 	"net/http"
 	"os"
 	"runtime"
+
+	"github.com/levmv/imgserv/config"
+	"github.com/levmv/imgserv/vips"
 )
 
 type UploadedInfo struct {

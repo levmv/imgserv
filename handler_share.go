@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/levmv/imgserv/config"
-	"github.com/levmv/imgserv/storage"
-	"github.com/levmv/imgserv/vips"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
+
+	"github.com/levmv/imgserv/config"
+	"github.com/levmv/imgserv/storage"
+	"github.com/levmv/imgserv/vips"
 )
 
 var (
@@ -21,9 +22,9 @@ var (
 
 func initSharer(ctx context.Context, conf *config.SharerConf) error {
 
-	if conf.Font == "" && conf.Logo == "" {
-		return nil
-	}
+	//if conf.Font == "" && conf.Logo == "" {
+	//	return nil
+	//}
 
 	var err error
 	conf.FontFile, err = filepath.Abs(conf.FontFile)
@@ -60,22 +61,20 @@ func serveShareImg(w http.ResponseWriter, r *http.Request) (int, error) {
 	q := r.URL.Query()
 	path := q.Get("key")
 	text := q.Get("text")
-	width, _ := strconv.Atoi(q.Get("width"))
-	height, _ := strconv.Atoi(q.Get("height"))
+	preview := q.Has("preview") && q.Get("preview") == "1"
+
+	fmt.Println(maxWidth, maxHeight)
 
 	if path == "" || text == "" {
 		return 500, errors.New("empty path or text params")
 	}
 
-	const maxWidth = 1200
-	const maxHeight = 630
+	maxWidth := 1200.0
+	maxHeight := 630.0
 
-	if width == 0 {
-		width = maxWidth
-	}
-
-	if height == 0 {
-		height = maxHeight
+	if preview {
+		maxWidth = maxWidth / 2
+		maxHeight = maxHeight / 2
 	}
 
 	ctx := r.Context()
@@ -101,15 +100,45 @@ func serveShareImg(w http.ResponseWriter, r *http.Request) (int, error) {
 	defer image.Close()
 	defer vips.Cleanup()
 
-	if err = image.ThumbnailFromBuffer(sourceImg.Data, width, height, vips.InterestingAttention, vips.SizeBoth); err != nil {
+	if err = image.LoadFromBuffer(sourceImg.Data); err != nil {
+		return 500, fmt.Errorf("failed to load. %v", err)
+	}
+
+	ratio := maxWidth / maxHeight
+	width := int(maxWidth)
+	height := int(maxHeight)
+	if float64(image.Width()/image.Height()) > ratio {
+		if image.Height() < int(maxHeight) {
+			height = image.Height()
+			width = int(float64(image.Height()) * ratio)
+		}
+	} else {
+		if image.Width() < int(maxWidth) {
+			width = image.Width()
+			height = int(float64(image.Width()) / ratio)
+		}
+	}
+
+	scale := float64(image.Width()) / maxWidth
+
+	fmt.Println(image.Width(), 1200, float64(image.Width())/maxWidth)
+
+	if err = image.Thumbnail(width, height, vips.InterestingAttention, vips.SizeDown); err != nil {
 		return 500, err
 	}
+
+	divHor := 14.0
+	divVer := 8.0
+
+	lineH := int(float64(image.Width()) / divHor)
+	lineV := int(float64(image.Height()) / divVer)
 
 	if err := image.Linear(0.6, 0); err != nil {
 		return 500, err
 	}
 
-	if err := image.Label(text, cfg.Sharer.Font, cfg.Sharer.FontFile, vips.Color{255, 255, 255}, 20, 5); err != nil {
+	if err := image.Label(text, cfg.Sharer.Font, cfg.Sharer.FontFile, vips.Color{255, 255, 255},
+		lineH, lineV*3, image.Width()-lineH*2, lineV*3); err != nil {
 		return 500, err
 	}
 
@@ -119,18 +148,20 @@ func serveShareImg(w http.ResponseWriter, r *http.Request) (int, error) {
 	if err = logoImage.LoadFromBuffer(logo.Data); err != nil {
 		return 500, err
 	}
-	if image.Width() < maxWidth {
-		logoImage.Resize(float64(image.Width()) / maxWidth)
+	if scale != 1 {
+		logoImage.Resize(scale)
 	}
 
-	pad := image.Width() / 100 * 5
-
-	logoImage.Embed(pad, pad, image.Width(), image.Height())
+	logoImage.Embed(lineH, lineV, image.Width(), image.Height())
 	if err = image.Composite(&logoImage); err != nil {
 		return 500, err
 	}
 
-	imageBytes, _ := image.ExportJpeg(90)
+	quality := 90
+	if preview {
+		quality = 60
+	}
+	imageBytes, _ := image.ExportJpeg(quality)
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Content-Length", strconv.Itoa(len(imageBytes)))
 	_, err = w.Write(imageBytes)

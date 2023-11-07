@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/levmv/imgserv/vips"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/levmv/imgserv/vips"
 )
 
 type cropParams struct {

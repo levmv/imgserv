@@ -1,11 +1,5 @@
 package vips
 
-/*
-#cgo pkg-config: vips
-#cgo CFLAGS: -O3
-#include "vips.h"
-*/
-import "C"
 import (
 	"context"
 	"errors"
@@ -15,6 +9,13 @@ import (
 	dbg "runtime/debug"
 	"unsafe"
 )
+
+/*
+#cgo pkg-config: vips
+#cgo CFLAGS: -O3
+#include "vips.h"
+*/
+import "C"
 
 type Image struct {
 	VipsImage *C.VipsImage
@@ -300,7 +301,7 @@ func (img *Image) ThumbnailFromBuffer(buf []byte, width int, height int, crop In
 	return nil
 }
 
-func (img *Image) Label(text string, font string, fontFile string, color Color, vpad int, hpad int) error {
+func (img *Image) Label(text string, font string, fontFile string, color Color, x int, y int, width int, height int) error {
 	var tmp *C.VipsImage
 
 	cText := C.CString(text)
@@ -312,13 +313,8 @@ func (img *Image) Label(text string, font string, fontFile string, color Color, 
 	ff := C.CString(fontFile)
 	defer C.free(unsafe.Pointer(ff))
 
-	hPadding := img.Width() / 100 * hpad
-	vPadding := img.Height() / 100 * vpad
-	width := img.Width() - hPadding*2
-	height := img.Height() - vPadding*2
-
 	if err := C.label(img.VipsImage, &tmp, cText, f, ff, C.double(color.R), C.double(color.G), C.double(color.B),
-		C.int(hPadding), C.int(vPadding), C.int(width), C.int(height)); err != 0 {
+		C.int(x), C.int(y), C.int(width), C.int(height)); err != 0 {
 		return handleImageError(tmp)
 	}
 

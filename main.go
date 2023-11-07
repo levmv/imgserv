@@ -4,19 +4,20 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/levmv/imgserv/config"
-	"github.com/levmv/imgserv/params"
-	"github.com/levmv/imgserv/storage"
-	"github.com/levmv/imgserv/vips"
-	"golang.org/x/sync/semaphore"
 	"log"
 	"os"
 	"os/signal"
 	"runtime/debug"
 	"syscall"
+
+	"github.com/levmv/imgserv/config"
+	"github.com/levmv/imgserv/params"
+	"github.com/levmv/imgserv/storage"
+	"github.com/levmv/imgserv/vips"
+	"golang.org/x/sync/semaphore"
 )
 
-const version = "0.1.0"
+const version = "0.1.1"
 
 const help = `usage: imgserv <action>
 actions:
@@ -77,7 +78,9 @@ func run(cfgPath string) error {
 
 	initUpload(cfg.Storage)
 	if cfg.Sharer != nil {
-		initSharer(ctx, cfg.Sharer)
+		if err = initSharer(ctx, cfg.Sharer); err != nil {
+			log.Fatalf("Fail to init sharer: %v", err)
+		}
 	}
 
 	startServer(cancel, cfg.Server)

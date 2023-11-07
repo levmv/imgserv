@@ -1,0 +1,22 @@
+[Unit]
+Description=Imgserv service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group==www-data
+
+Restart=on-failure
+RestartSec=5
+startLimitIntervalSec=60
+
+# Uncomment and set working directory if you want to use relative path to config/aws credential files, cache dir, etc
+#WorkingDirectory=/home/user/foo/bar
+
+Environment="MALLOC_ARENA_MAX=2"
+ExecStart=/usr/local/bin/imgserv -c /etc/imgserv/config.json
+
+
+[Install]
+WantedBy=multi-user.target

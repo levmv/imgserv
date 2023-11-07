@@ -29,6 +29,9 @@ VipsImage* image_new_from_buffer(void *buf, size_t len) {
 }
 
 int thumbnail_buffer(void *buf, size_t len, VipsImage **out, int width, int height, int crop, int size) {
+    if (height == 0) {
+        return vips_thumbnail_buffer(buf, len, out, width, "crop", crop, "size", size, NULL);
+    }
     return vips_thumbnail_buffer(buf, len, out, width, "height", height, "crop", crop, "size", size, NULL);
 }
 

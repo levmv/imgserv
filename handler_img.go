@@ -16,7 +16,7 @@ import (
 
 func serveImg(w http.ResponseWriter, r *http.Request) (int, error) {
 
-	if maxSem.TryAcquire(1) == false {
+	if !maxSem.TryAcquire(1) {
 		IncRejectedRequests()
 		return 429, errors.New("too many requests")
 	}
@@ -31,14 +31,14 @@ func serveImg(w http.ResponseWriter, r *http.Request) (int, error) {
 		return 400, errors.New("no input query")
 	}
 
-	inputQuery, err := sign.Verify(inputQuery)
+	verifiedQuery, err := sign.Verify(inputQuery)
 	if err != nil {
 		return 403, err
 	}
 
 	ctx := r.Context()
 
-	path, pms, err := params.Parse(inputQuery)
+	path, pms, err := params.Parse(verifiedQuery)
 	if err != nil {
 		return 500, err
 	}
@@ -68,7 +68,7 @@ func serveImg(w http.ResponseWriter, r *http.Request) (int, error) {
 	defer image.Close()
 
 	if err = image.LoadFromBuffer(sourceImg.Data); err != nil {
-		return 500, fmt.Errorf("failed to load %s: %v", inputQuery, err)
+		return 500, fmt.Errorf("failed to load %s: %v", verifiedQuery, err)
 	}
 
 	size := vips.SizeDown
@@ -92,7 +92,7 @@ func serveImg(w http.ResponseWriter, r *http.Request) (int, error) {
 
 	height := pms.Height
 
-	if pms.Resize == true {
+	if pms.Resize {
 		finalWidth := pms.Width
 		finalHeight := pms.Height
 		size = vips.SizeDown

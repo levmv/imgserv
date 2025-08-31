@@ -47,7 +47,7 @@ func ST3sign(path string) (string, error) {
 func (sig UrlSignature) T3sign(path string) (string, error) {
 	sign, realPath, ok := strings.Cut(strings.TrimLeft(path, "/"), "/")
 
-	if ok != true {
+	if !ok {
 		return path, fmt.Errorf("wrong input %s", path)
 	}
 

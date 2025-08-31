@@ -63,8 +63,6 @@ func serveShareImg(w http.ResponseWriter, r *http.Request) (int, error) {
 	text := q.Get("text")
 	preview := q.Has("preview") && q.Get("preview") == "1"
 
-	fmt.Println(maxWidth, maxHeight)
-
 	if path == "" || text == "" {
 		return 500, errors.New("empty path or text params")
 	}
@@ -120,8 +118,6 @@ func serveShareImg(w http.ResponseWriter, r *http.Request) (int, error) {
 	}
 
 	scale := float64(image.Width()) / maxWidth
-
-	fmt.Println(image.Width(), 1200, float64(image.Width())/maxWidth)
 
 	if err = image.Thumbnail(width, height, vips.InterestingAttention, vips.SizeDown); err != nil {
 		return 500, err

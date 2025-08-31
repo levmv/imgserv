@@ -60,9 +60,7 @@ func initCachePath(base string) (string, error) {
 	if err != nil {
 		return base, fmt.Errorf("incorrect cachePath %s (%w)", base, err)
 	}
-	_, err = os.Stat(base)
-
-	if err != nil {
+	if _, err := os.Stat(base); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return base, fmt.Errorf("can't access cache directory: %s (%w)", base, err)
 		}
@@ -137,7 +135,9 @@ func (cs *Cached) readImage(ctx context.Context, path string, si *SourceImage) e
 	r, err = cs.s3.Open(ctx, path)
 	if err != nil {
 		if errors.Is(err, NotFoundError) {
-			cs.cacheFile(path, []byte("404"))
+			if cerr := cs.cacheFile(path, []byte("404")); cerr != nil {
+				err = cerr
+			}
 		}
 		return err
 	}
@@ -154,7 +154,8 @@ func (cs *Cached) readImage(ctx context.Context, path string, si *SourceImage) e
 }
 
 func (cs *Cached) getCached(path string) (io.ReadCloser, error) {
-	r, err := os.Open(cs.hashName(path))
+	cachePath := cs.hashName(path)
+	r, err := os.Open(cachePath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, NotCached
@@ -162,7 +163,7 @@ func (cs *Cached) getCached(path string) (io.ReadCloser, error) {
 		return nil, err
 	}
 	curTime := time2.Now().Local()
-	_ = os.Chtimes(path, curTime, curTime)
+	_ = os.Chtimes(cachePath, curTime, curTime)
 
 	if info, err := r.Stat(); err == nil {
 		if info.Size() == 3 {
@@ -189,10 +190,10 @@ func (cs *Cached) cacheFile(path string, data []byte) error {
 
 	// We save temp in the same folder to avoid "invalid cross-device link"
 	tempFile, err := os.CreateTemp(dir, "goresizer")
-	defer tempFile.Close()
 	if err != nil {
 		return err
 	}
+	defer tempFile.Close()
 
 	if _, err = tempFile.Write(data); err != nil {
 		return err

@@ -18,10 +18,10 @@ func (si *SourceImage) Close() {
 	}
 }
 
-func (si *SourceImage) Read(b []byte) (n int, err error) {
-	b = si.Data[:len(b)]
-	return len(si.Data), nil
-}
+//func (si *SourceImage) Read(b []byte) (n int, err error) {
+//	b = si.Data[:len(b)]
+//	return len(si.Data), nil
+//}
 
 func (si *SourceImage) ReadFrom(r io.Reader) (n int64, err error) {
 	si.Reset()

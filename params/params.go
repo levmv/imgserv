@@ -100,7 +100,7 @@ func Parse(inputQuery string) (string, Params, error) {
 	var exist bool
 
 	paramsPart, path, found := strings.Cut(strings.Trim(inputQuery, "/"), "/")
-	if found == false {
+	if !found {
 		return "", params, fmt.Errorf("incorrect inputQuery %s", inputQuery)
 	}
 
@@ -201,7 +201,7 @@ func Parse(inputQuery string) (string, Params, error) {
 			params.PixelRatio, _ = strconv.ParseFloat(value, 64)
 		case "_":
 			params, exist = presets[value]
-			if exist == false {
+			if !exist {
 				return path, params, errors.New("unknown preset " + value)
 			}
 		case "n":

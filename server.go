@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/levmv/imgserv/config"
-	"github.com/levmv/imgserv/storage"
-	"golang.org/x/sync/semaphore"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/levmv/imgserv/config"
+	"github.com/levmv/imgserv/storage"
+	"golang.org/x/sync/semaphore"
 )
 
 type appHandler func(http.ResponseWriter, *http.Request) (int, error)
@@ -45,11 +47,11 @@ func startServer(cancel context.CancelFunc, conf config.ServerConf) {
 	maxSem = semaphore.NewWeighted(int64(conf.MaxClients))
 	queueSem = semaphore.NewWeighted(int64(conf.Concurrency))
 
-	go func() {
-		for range time.Tick(time.Duration(conf.FreeMemoryInterval) * time.Second) {
-			Free()
-		}
-	}()
+	ticker := time.NewTicker(time.Duration(conf.FreeMemoryInterval) * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		Free()
+	}
 
 	http.Handle("/", appHandler(serveImg))
 	http.Handle("/share", appHandler(serveShareImg))
@@ -57,9 +59,7 @@ func startServer(cancel context.CancelFunc, conf config.ServerConf) {
 	http.Handle("/upload_file", appHandler(UploadFileHandler))
 	http.Handle("/delete", appHandler(DeleteHandler))
 	http.Handle("/stat", appHandler(serveStat))
-	http.HandleFunc("/favicon.ico", func(w http.ResponseWriter, request *http.Request) {
-		w.WriteHeader(404)
-	})
+	http.HandleFunc("/favicon.ico", http.NotFound)
 
 	log.Printf("Starting server on %s", conf.BindTo)
 
@@ -79,9 +79,8 @@ func DeleteHandler(w http.ResponseWriter, r *http.Request) (int, error) {
 	}
 
 	if err := imgStorage.Delete(key); err != nil {
-		if errors.Is(storage.NotFoundError, err) {
-			log.Println("can't delete not existent file", key)
-			return 200, err
+		if errors.Is(err, storage.NotFoundError) {
+			return 404, fmt.Errorf("file not found: %s", key)
 		}
 		return 500, err
 	}

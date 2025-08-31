@@ -2,7 +2,6 @@ package vips
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"runtime"
@@ -89,7 +88,7 @@ func Init(conf *Config) error {
 
 	if err := C.vips_initialize(); err != 0 {
 		C.vips_shutdown()
-		return errors.New(fmt.Sprintf("Unable to start vips code=%v", err))
+		return fmt.Errorf("Unable to start vips code=%v", err)
 	}
 
 	if conf == nil {

@@ -47,11 +47,13 @@ func startServer(cancel context.CancelFunc, conf config.ServerConf) {
 	maxSem = semaphore.NewWeighted(int64(conf.MaxClients))
 	queueSem = semaphore.NewWeighted(int64(conf.Concurrency))
 
-	ticker := time.NewTicker(time.Duration(conf.FreeMemoryInterval) * time.Second)
-	defer ticker.Stop()
-	for range ticker.C {
-		Free()
-	}
+	go func() {
+		ticker := time.NewTicker(time.Duration(conf.FreeMemoryInterval) * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			Free()
+		}
+	}()
 
 	http.Handle("/", appHandler(serveImg))
 	http.Handle("/share", appHandler(serveShareImg))

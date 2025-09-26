@@ -143,11 +143,11 @@ func uploadPhoto(name string, r io.Reader) (*UploadedInfo, error) {
 		return nil, fmt.Errorf("input image is too big %vx%v", image.Width(), image.Height())
 	}
 
-	if err := image.Strip(); err != nil {
+	if err := preprocess(&image); err != nil {
 		return nil, err
 	}
 
-	if err := preprocess(&image); err != nil {
+	if err := image.Strip(); err != nil {
 		return nil, err
 	}
 

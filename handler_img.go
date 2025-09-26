@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -47,6 +48,9 @@ func serveImg(w http.ResponseWriter, r *http.Request) (int, error) {
 	// io/cpu parts (and it was in first ver), it's more memory efficient that way and have no real performance impact
 	// in real (ours) production conditions
 	if err := queueSem.Acquire(ctx, 1); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return 499, errors.New("request cancelled")
+		}
 		panic("queueSem")
 	}
 	defer queueSem.Release(1)

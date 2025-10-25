@@ -231,8 +231,6 @@ func (img *Image) Strip() error {
 
 func (img *Image) ExportJpeg(quality int) ([]byte, error) {
 
-	defer C.g_object_unref(C.gpointer(img.VipsImage))
-
 	var ptr unsafe.Pointer
 	// We use unsafe.Slice, so we need to free this memory later
 	cancel := func() {
@@ -256,8 +254,6 @@ func (img *Image) ExportJpeg(quality int) ([]byte, error) {
 }
 
 func (img *Image) ExportWebp(quality int) ([]byte, error) {
-
-	defer C.g_object_unref(C.gpointer(img.VipsImage))
 
 	var ptr unsafe.Pointer
 	// We use unsafe.Slice, so we need to free this memory later
@@ -325,6 +321,17 @@ func (img *Image) Label(text string, font string, fontFile string, color Color, 
 func (img *Image) Linear(multiply float32, add float32) error {
 	var out *C.VipsImage
 	if err := C.linear(img.VipsImage, &out, C.double(multiply), C.double(add)); err != 0 {
+		return handleImageError(out)
+	}
+	C.swap_and_clear(&img.VipsImage, out)
+	return nil
+}
+
+func (img *Image) AutoRotate() error {
+	var out *C.VipsImage
+
+	err := C.autorot(img.VipsImage, &out)
+	if err != 0 {
 		return handleImageError(out)
 	}
 	C.swap_and_clear(&img.VipsImage, out)

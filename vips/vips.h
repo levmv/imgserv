@@ -34,3 +34,4 @@ int label(VipsImage *in, VipsImage **out, const char *text, const char *font, co
 int linear(VipsImage *in, VipsImage **out, double multiple, double add);
 int strip(VipsImage *in, VipsImage **out);
 void vips_cleanup();
+int autorot(VipsImage *in, VipsImage **out);

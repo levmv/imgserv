@@ -24,8 +24,8 @@ int vips_jpegload_go(void *buf, size_t len, VipsImage **out) {
   return vips_jpegload_buffer(buf, len, out, "access", VIPS_ACCESS_SEQUENTIAL, NULL);
 }
 
-VipsImage* image_new_from_buffer(void *buf, size_t len) {
-    return vips_image_new_from_buffer(buf, len, "", "access", VIPS_ACCESS_SEQUENTIAL, NULL);
+VipsImage* image_new_from_buffer(void *buf, size_t len) {  
+  return vips_image_new_from_buffer(buf, len, "", "access", VIPS_ACCESS_SEQUENTIAL, NULL);
 }
 
 int thumbnail_buffer(void *buf, size_t len, VipsImage **out, int width, int height, int crop, int size) {
@@ -196,6 +196,10 @@ int strip(VipsImage *in, VipsImage **out) {
   g_strfreev(fields);
 
   return 0;
+}
+
+int autorot(VipsImage *in, VipsImage **out) {
+	return vips_autorot(in, out, NULL);
 }
 
 

@@ -19,9 +19,11 @@ type ServerConf struct {
 
 type StorageConf struct {
 	Credentials string `json:"credentials"`
+	Type        string `json:"type"`
 	Region      string `json:"region"`
 	Bucket      string `json:"bucket"`
 	CachePath   string `json:"cache_path"`
+	LocalPath   string `json:"local_path"`
 	MaxWidth    int    `json:"max_width"`
 	MaxHeight   int    `json:"max_height"`
 }
@@ -81,18 +83,36 @@ func Parse(configFile string) (*Config, error) {
 		return nil, err
 	}
 
-	if cfg.Storage.Credentials == "" {
-		cfg.Storage.Credentials = ".aws_credentials"
-	} else if _, err := os.Stat(cfg.Storage.Credentials); errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("aws credentials files doesn't exist (%s)", cfg.Storage.Credentials)
+	if cfg.Storage.Type == "" {
+		cfg.Storage.Type = "s3"
 	}
 
-	if cfg.Storage.Region == "" {
-		cfg.Storage.Region = "ru-central1"
-	}
+	switch cfg.Storage.Type {
+	case "s3":
+		if cfg.Storage.Credentials == "" {
+			cfg.Storage.Credentials = ".aws_credentials"
+		} else if _, err := os.Stat(cfg.Storage.Credentials); errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("aws credentials files doesn't exist (%s)", cfg.Storage.Credentials)
+		}
 
-	if cfg.Storage.Bucket == "" {
-		return nil, fmt.Errorf("storage.bucket must not be empty")
+		if cfg.Storage.Region == "" {
+			cfg.Storage.Region = "ru-central1"
+		}
+
+		if cfg.Storage.Bucket == "" {
+			return nil, fmt.Errorf("storage.bucket must not be empty")
+		}
+	case "local":
+		if cfg.Storage.LocalPath == "" {
+			return nil, fmt.Errorf("storage.local_path must not be empty")
+		}
+		var err error
+		cfg.Storage.LocalPath, err = filepath.Abs(cfg.Storage.LocalPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to process local storage path: %s (%w)", cfg.Storage.LocalPath, err)
+		}
+	default:
+		return nil, fmt.Errorf("unsupported storage.type %q", cfg.Storage.Type)
 	}
 
 	if cfg.Server.LogFile != "" {

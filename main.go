@@ -29,7 +29,7 @@ var (
 	maxSem     *semaphore.Weighted
 	queueSem   *semaphore.Weighted
 	sign       UrlSignature
-	imgStorage *storage.Cached
+	imgStorage storage.ImageStorage
 	cfg        *config.Config
 )
 
@@ -71,7 +71,7 @@ func run(cfgPath string) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	imgStorage, err = storage.NewCached(cfg.Storage)
+	imgStorage, err = storage.New(cfg.Storage)
 	if err != nil {
 		log.Fatalf("Fail to init storage: %v", err)
 	}

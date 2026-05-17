@@ -19,6 +19,14 @@ import (
 
 var NotCached = errors.New("not cached")
 
+type ImageStorage interface {
+	NewImage() SourceImage
+	LoadImage(context.Context, string) (SourceImage, error)
+	Upload(string, []byte) error
+	UploadFile(string, io.Reader) error
+	Delete(string) error
+}
+
 type Cached struct {
 	s3       S3Storage
 	pool     *sync.Pool
@@ -47,6 +55,17 @@ func NewCached(conf config.StorageConf) (*Cached, error) {
 	}
 
 	return &cs, nil
+}
+
+func New(conf config.StorageConf) (ImageStorage, error) {
+	switch conf.Type {
+	case "", "s3":
+		return NewCached(conf)
+	case "local":
+		return NewLocal(conf.LocalPath)
+	default:
+		return nil, fmt.Errorf("unsupported storage.type %q", conf.Type)
+	}
 }
 
 func initCachePath(base string) (string, error) {

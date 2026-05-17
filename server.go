@@ -33,12 +33,14 @@ func serveStat(w http.ResponseWriter, r *http.Request) (int, error) {
 func (fn appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if status, err := fn(w, r); err != nil {
 		log.Printf("Error %d %v", status, err)
-		switch status {
-		case http.StatusNotFound:
-			http.Error(w, http.StatusText(http.StatusNotFound), status)
-		default:
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		if status < http.StatusBadRequest || status > 599 {
+			status = http.StatusInternalServerError
 		}
+		statusText := http.StatusText(status)
+		if statusText == "" {
+			statusText = http.StatusText(http.StatusInternalServerError)
+		}
+		http.Error(w, statusText, status)
 	}
 }
 

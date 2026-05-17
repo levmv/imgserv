@@ -141,6 +141,10 @@ func (img *Image) Close() {
 }
 
 func (img *Image) Resize(ratio float64) error {
+	if ratio <= 0 {
+		return fmt.Errorf("invalid resize ratio %g: must be positive", ratio)
+	}
+
 	var out *C.VipsImage
 	if err := C.resize(img.VipsImage, &out, C.double(ratio)); err != 0 {
 		return handleImageError(out)
@@ -230,6 +234,9 @@ func (img *Image) Strip() error {
 }
 
 func (img *Image) ExportJpeg(quality int) ([]byte, error) {
+	if err := validateQuality(quality); err != nil {
+		return nil, err
+	}
 
 	var ptr unsafe.Pointer
 	// We use unsafe.Slice, so we need to free this memory later
@@ -254,6 +261,9 @@ func (img *Image) ExportJpeg(quality int) ([]byte, error) {
 }
 
 func (img *Image) ExportWebp(quality int) ([]byte, error) {
+	if err := validateQuality(quality); err != nil {
+		return nil, err
+	}
 
 	var ptr unsafe.Pointer
 	// We use unsafe.Slice, so we need to free this memory later
@@ -277,6 +287,10 @@ func (img *Image) ExportWebp(quality int) ([]byte, error) {
 }
 
 func (img *Image) LoadFromBuffer(buf []byte) error {
+	if len(buf) == 0 {
+		return fmt.Errorf("empty image buffer")
+	}
+
 	img.VipsImage = C.image_new_from_buffer(unsafe.Pointer(&buf[0]), C.size_t(len(buf)))
 
 	if img.VipsImage == nil {
@@ -286,6 +300,10 @@ func (img *Image) LoadFromBuffer(buf []byte) error {
 }
 
 func (img *Image) ThumbnailFromBuffer(buf []byte, width int, height int, crop Interesting, size Size) error {
+	if len(buf) == 0 {
+		return fmt.Errorf("empty image buffer")
+	}
+
 	var out *C.VipsImage
 
 	if err := C.thumbnail_buffer(unsafe.Pointer(&buf[0]), C.size_t(len(buf)), &out, C.int(width), C.int(height), C.int(crop), C.int(size)); err != 0 {
@@ -335,6 +353,13 @@ func (img *Image) AutoRotate() error {
 		return handleImageError(out)
 	}
 	C.swap_and_clear(&img.VipsImage, out)
+	return nil
+}
+
+func validateQuality(quality int) error {
+	if quality < 1 || quality > 100 {
+		return fmt.Errorf("invalid quality %d: must be between 1 and 100", quality)
+	}
 	return nil
 }
 

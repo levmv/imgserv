@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"strconv"
 	"strings"
@@ -129,12 +130,24 @@ func Parse(inputQuery string) (string, Params, error) {
 			}
 			sizes := strings.Split(value, "x")
 			if len(sizes) == 2 {
+				width, err := parsePositiveInt(sizes[0], "resize width")
+				if err != nil {
+					return path, params, err
+				}
+				height, err := parsePositiveInt(sizes[1], "resize height")
+				if err != nil {
+					return path, params, err
+				}
 				params.Resize = true
-				params.Width, _ = strconv.Atoi(sizes[0])
-				params.Height, _ = strconv.Atoi(sizes[1])
+				params.Width = width
+				params.Height = height
 			} else if len(sizes) == 1 && sizes[0] != "" {
+				width, err := parsePositiveInt(sizes[0], "resize width")
+				if err != nil {
+					return path, params, err
+				}
 				params.Resize = true
-				params.Width, _ = strconv.Atoi(sizes[0])
+				params.Width = width
 			} else {
 				return path, params, errors.New("wrong resize values count")
 			}
@@ -144,21 +157,38 @@ func Parse(inputQuery string) (string, Params, error) {
 				return path, params, errors.New("wrong crop values count")
 			}
 			cropParams := cropParams{}
-			cropParams.X, _ = strconv.Atoi(numbers[0])
-			cropParams.Y, _ = strconv.Atoi(numbers[1])
-			cropParams.Width, _ = strconv.Atoi(numbers[2])
-			cropParams.Height, _ = strconv.Atoi(numbers[3])
+			cropParams.X, err = parseNonNegativeInt(numbers[0], "crop x")
+			if err != nil {
+				return path, params, err
+			}
+			cropParams.Y, err = parseNonNegativeInt(numbers[1], "crop y")
+			if err != nil {
+				return path, params, err
+			}
+			cropParams.Width, err = parsePositiveInt(numbers[2], "crop width")
+			if err != nil {
+				return path, params, err
+			}
+			cropParams.Height, err = parsePositiveInt(numbers[3], "crop height")
+			if err != nil {
+				return path, params, err
+			}
 			params.Crop = cropParams
 		case "q":
-			params.Quality, _ = strconv.Atoi(value)
+			params.Quality, err = parseQuality(value)
+			if err != nil {
+				return path, params, err
+			}
 
 		case "g":
 			subName := value[:1]
 			if subName == "f" {
-				panic("not implemented")
+				return path, params, errors.New("gravity fill is not implemented")
 			}
 			if subName == "s" {
 				params.Gravity = GravitySmart
+			} else {
+				return path, params, errors.New("unsupported gravity " + subName)
 			}
 
 		case "w":
@@ -177,17 +207,23 @@ func Parse(inputQuery string) (string, Params, error) {
 
 			opts := strings.Split(value, "-")
 			if len(opts) > 2 {
-				wm.Size, _ = strconv.Atoi(opts[2])
+				wm.Size, err = parsePositiveInt(opts[2], "watermark size")
+				if err != nil {
+					return path, params, err
+				}
 			}
 			if len(opts) > 1 {
 				if len(opts[1]) > 2 {
 					wm.Position = PositionCoords
 					coords := strings.Split(opts[1], "x")
-					wm.PositionX, err = strconv.Atoi(coords[0])
+					if len(coords) != 2 {
+						return path, params, errors.New("wrong watermark coordinate")
+					}
+					wm.PositionX, err = parseNonNegativeInt(coords[0], "watermark x")
 					if err != nil {
 						return path, params, errors.New("wrong watermark coordinate")
 					}
-					wm.PositionY, err = strconv.Atoi(coords[1])
+					wm.PositionY, err = parseNonNegativeInt(coords[1], "watermark y")
 					if err != nil {
 						return path, params, errors.New("wrong watermark coordinate")
 					}
@@ -195,10 +231,16 @@ func Parse(inputQuery string) (string, Params, error) {
 					wm.Position = PositionType(opts[1])
 				}
 			}
-			wm.Path, _ = url.QueryUnescape(opts[0])
+			wm.Path, err = url.QueryUnescape(opts[0])
+			if err != nil {
+				return path, params, errors.New("incorrect escaping of watermark path")
+			}
 			params.Watermarks = append(params.Watermarks, wm)
 		case "p":
-			params.PixelRatio, _ = strconv.ParseFloat(value, 64)
+			params.PixelRatio, err = parsePositiveFloat(value, "pixel ratio")
+			if err != nil {
+				return path, params, err
+			}
 		case "_":
 			params, exist = presets[value]
 			if !exist {
@@ -210,6 +252,50 @@ func Parse(inputQuery string) (string, Params, error) {
 		}
 	}
 	return path, params, nil
+}
+
+func parsePositiveInt(value string, name string) (int, error) {
+	n, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("wrong %s value: %w", name, err)
+	}
+	if n <= 0 {
+		return 0, fmt.Errorf("%s must be positive", name)
+	}
+	return n, nil
+}
+
+func parseNonNegativeInt(value string, name string) (int, error) {
+	n, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("wrong %s value: %w", name, err)
+	}
+	if n < 0 {
+		return 0, fmt.Errorf("%s must not be negative", name)
+	}
+	return n, nil
+}
+
+func parseQuality(value string) (int, error) {
+	quality, err := parsePositiveInt(value, "quality")
+	if err != nil {
+		return 0, err
+	}
+	if quality > 100 {
+		return 0, errors.New("quality must not be greater than 100")
+	}
+	return quality, nil
+}
+
+func parsePositiveFloat(value string, name string) (float64, error) {
+	n, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return 0, fmt.Errorf("wrong %s value: %w", name, err)
+	}
+	if n <= 0 || math.IsNaN(n) || math.IsInf(n, 0) {
+		return 0, fmt.Errorf("%s must be positive", name)
+	}
+	return n, nil
 }
 
 func Gravity2Vips(str GravityType) vips.Interesting {

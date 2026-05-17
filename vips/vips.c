@@ -50,7 +50,7 @@ int resize(VipsImage *in, VipsImage **out, double ratio) {
         vips_cast(t[2], out, in->BandFmt, NULL);
 
     clear_image(&base);
-    return 0;
+    return res;
 }
 
 int crop(VipsImage *in, VipsImage **out, int x, int y, int width, int height) {
@@ -133,7 +133,7 @@ int flatten_image(VipsImage *in, VipsImage **out, double r, double g, double b) 
     double background[3] = {r, g, b};
     VipsArrayDouble *vipsBackground = vips_array_double_new(background, 3);
 
-    int code = vips_flatten(in, out, "background", vipsBackground);
+    int code = vips_flatten(in, out, "background", vipsBackground, NULL);
 
     vips_area_unref(VIPS_AREA(vipsBackground));
     return code;

@@ -39,7 +39,7 @@ func NewCached(conf config.StorageConf) (*Cached, error) {
 		return nil, err
 	}
 
-	st, err := NewS3Storage(conf.Bucket, conf.Credentials)
+	st, err := NewS3Storage(conf.Bucket, conf.Credentials, conf.Region)
 	if err != nil {
 		return nil, err
 	}

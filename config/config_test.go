@@ -47,6 +47,10 @@ func TestParseRejectsUnsupportedStorageType(t *testing.T) {
 }
 
 func TestParseDefaultsStorageTypeToS3(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeCredentialsFile(t, filepath.Join(dir, ".aws_credentials"))
+
 	cfg := parseConfigText(t, `{
 		"storage": {
 			"bucket": "bucket"
@@ -58,6 +62,23 @@ func TestParseDefaultsStorageTypeToS3(t *testing.T) {
 	}
 	if cfg.Storage.Region != "ru-central1" {
 		t.Fatalf("got region %q, want ru-central1", cfg.Storage.Region)
+	}
+	if cfg.Storage.Credentials != filepath.Join(dir, ".aws_credentials") {
+		t.Fatalf("got credentials path %q, want absolute default path", cfg.Storage.Credentials)
+	}
+}
+
+func TestParseRejectsMissingS3Credentials(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing_credentials")
+
+	_, err := Parse(writeConfigText(t, `{
+		"storage": {
+			"bucket": "bucket",
+			"credentials": `+quote(missing)+`
+		}
+	}`))
+	if err == nil || !strings.Contains(err.Error(), "storage.credentials") {
+		t.Fatalf("got error %v, want storage.credentials validation", err)
 	}
 }
 
@@ -79,6 +100,15 @@ func writeConfigText(t *testing.T, text string) string {
 		t.Fatalf("failed to write config: %v", err)
 	}
 	return path
+}
+
+func writeCredentialsFile(t *testing.T, path string) {
+	t.Helper()
+
+	contents := []byte("[default]\naws_access_key_id = test-key\naws_secret_access_key = test-secret\n")
+	if err := os.WriteFile(path, contents, 0600); err != nil {
+		t.Fatalf("failed to write credentials: %v", err)
+	}
 }
 
 func quote(s string) string {

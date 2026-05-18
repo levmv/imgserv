@@ -9,7 +9,8 @@ import (
 	"log"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
@@ -21,35 +22,49 @@ type S3Storage struct {
 	client *s3.Client
 }
 
-func NewS3Storage(b string, credentials string) (S3Storage, error) {
+func NewS3Storage(bucket string, credentialsFile string, region string) (S3Storage, error) {
 
 	f := S3Storage{
-		Bucket: b,
+		Bucket: bucket,
 	}
+	ctx := context.TODO()
 
 	// Creating a custom endpoint resolver for returning correct URL for S3 storage in the ru-central1 region
-	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-		if service == s3.ServiceID && region == "ru-central1" {
+	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, requestedRegion string, options ...interface{}) (aws.Endpoint, error) {
+		if service == s3.ServiceID && requestedRegion == "ru-central1" {
 			return aws.Endpoint{
 				PartitionID:   "yc",
 				URL:           "https://storage.yandexcloud.net",
 				SigningRegion: "ru-central1",
 			}, nil
 		}
-		return aws.Endpoint{}, fmt.Errorf("unknown endpoint requested")
+		return aws.Endpoint{}, &aws.EndpointNotFoundError{Err: fmt.Errorf("unknown endpoint requested")}
 	})
 
-	conf, err := config.LoadDefaultConfig(context.TODO(), config.WithSharedCredentialsFiles(
-		[]string{credentials},
-	), config.WithRegion("ru-central1"),
-		config.WithEndpointResolverWithOptions(customResolver),
+	sharedConfig, err := awsconfig.LoadSharedConfigProfile(ctx, "default", func(o *awsconfig.LoadSharedConfigOptions) {
+		o.ConfigFiles = []string{}
+		o.CredentialsFiles = []string{credentialsFile}
+	})
+	if err != nil {
+		return f, fmt.Errorf("failed to load S3 credentials from %s: %w", credentialsFile, err)
+	}
+	if !sharedConfig.Credentials.HasKeys() {
+		return f, fmt.Errorf("failed to load S3 credentials from %s: default profile must contain aws_access_key_id and aws_secret_access_key", credentialsFile)
+	}
+
+	conf, err := awsconfig.LoadDefaultConfig(ctx,
+		awsconfig.WithCredentialsProvider(credentials.StaticCredentialsProvider{
+			Value: sharedConfig.Credentials,
+		}),
+		awsconfig.WithRegion(region),
+		awsconfig.WithEndpointResolverWithOptions(customResolver),
 	)
 	if err != nil {
-		log.Fatal(err)
 		return f, err
 	}
 
 	f.client = s3.NewFromConfig(conf)
+	log.Printf("Configured S3 storage bucket=%q region=%q credentials=%q credentials_source=%q", bucket, region, credentialsFile, sharedConfig.Credentials.Source)
 
 	return f, nil
 }

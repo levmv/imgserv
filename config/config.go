@@ -91,8 +91,14 @@ func Parse(configFile string) (*Config, error) {
 	case "s3":
 		if cfg.Storage.Credentials == "" {
 			cfg.Storage.Credentials = ".aws_credentials"
-		} else if _, err := os.Stat(cfg.Storage.Credentials); errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("aws credentials files doesn't exist (%s)", cfg.Storage.Credentials)
+		}
+		var err error
+		cfg.Storage.Credentials, err = filepath.Abs(cfg.Storage.Credentials)
+		if err != nil {
+			return nil, fmt.Errorf("failed to process storage.credentials path: %s (%w)", cfg.Storage.Credentials, err)
+		}
+		if err := validateReadableFile(cfg.Storage.Credentials, "storage.credentials"); err != nil {
+			return nil, err
 		}
 
 		if cfg.Storage.Region == "" {
@@ -124,4 +130,25 @@ func Parse(configFile string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+func validateReadableFile(path string, name string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("%s file doesn't exist: %s", name, path)
+		}
+		return fmt.Errorf("failed to read %s file: %s (%w)", name, path, err)
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to stat %s file: %s (%w)", name, path, err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("%s must be a file, got directory: %s", name, path)
+	}
+
+	return nil
 }

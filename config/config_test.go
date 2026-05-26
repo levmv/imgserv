@@ -61,6 +61,122 @@ func TestParseOverlayStorageConfig(t *testing.T) {
 	}
 }
 
+func TestParseWithOverridesChangesOnlyRequestedFields(t *testing.T) {
+	dir := t.TempDir()
+	credentials := filepath.Join(dir, "credentials")
+	oldCachePath := filepath.Join(dir, "old-cache")
+	newCachePath := filepath.Join(dir, "new-cache")
+	writeCredentialsFile(t, credentials)
+
+	cfg := parseConfigTextWithOverrides(t, `{
+		"resizer": {
+			"output_format": "webp"
+		},
+		"storage": {
+			"type": "s3",
+			"cache_path": `+quote(oldCachePath)+`,
+			"credentials": `+quote(credentials)+`,
+			"region": "custom-region",
+			"bucket": "bucket",
+			"max_width": 1200,
+			"max_height": 900
+		}
+	}`, Overrides{
+		StorageCachePath: newCachePath,
+	})
+
+	if cfg.Storage.Type != "s3" {
+		t.Fatalf("got storage type %q, want s3", cfg.Storage.Type)
+	}
+	if cfg.Storage.CachePath != newCachePath {
+		t.Fatalf("got cache path %q, want %q", cfg.Storage.CachePath, newCachePath)
+	}
+	if cfg.Storage.Credentials != credentials {
+		t.Fatalf("got credentials path %q, want %q", cfg.Storage.Credentials, credentials)
+	}
+	if cfg.Storage.Region != "custom-region" {
+		t.Fatalf("got region %q, want custom-region", cfg.Storage.Region)
+	}
+	if cfg.Storage.Bucket != "bucket" {
+		t.Fatalf("got bucket %q, want bucket", cfg.Storage.Bucket)
+	}
+	if cfg.Storage.MaxWidth != 1200 || cfg.Storage.MaxHeight != 900 {
+		t.Fatalf("got max size %dx%d, want 1200x900", cfg.Storage.MaxWidth, cfg.Storage.MaxHeight)
+	}
+	if cfg.Resizer.OutputType != OutputTypeWebp {
+		t.Fatalf("got output format %q, want webp", cfg.Resizer.OutputType)
+	}
+}
+
+func TestParseAcceptsOverridesArgument(t *testing.T) {
+	dir := t.TempDir()
+	credentials := filepath.Join(dir, "credentials")
+	localPath := filepath.Join(dir, "local")
+	writeCredentialsFile(t, credentials)
+
+	cfg, err := Parse(writeConfigText(t, `{
+		"storage": {
+			"type": "s3",
+			"credentials": `+quote(credentials)+`,
+			"bucket": "bucket",
+			"local_path": `+quote(localPath)+`
+		}
+	}`), Overrides{
+		StorageType: "local",
+	})
+	if err != nil {
+		t.Fatalf("Parse returned an error: %v", err)
+	}
+	if cfg.Storage.Type != "local" {
+		t.Fatalf("got storage type %q, want local", cfg.Storage.Type)
+	}
+	if cfg.Storage.LocalPath != localPath {
+		t.Fatalf("got local path %q, want %q", cfg.Storage.LocalPath, localPath)
+	}
+}
+
+func TestParseWithOverridesCanTurnS3ConfigIntoOverlay(t *testing.T) {
+	dir := t.TempDir()
+	credentials := filepath.Join(dir, "credentials")
+	localPath := filepath.Join(dir, "local")
+	cachePath := filepath.Join(dir, "cache")
+	writeCredentialsFile(t, credentials)
+
+	cfg := parseConfigTextWithOverrides(t, `{
+		"storage": {
+			"type": "s3",
+			"credentials": `+quote(credentials)+`,
+			"region": "custom-region",
+			"bucket": "bucket",
+			"max_width": 1200,
+			"max_height": 900
+		}
+	}`, Overrides{
+		StorageType:      "overlay",
+		StorageLocalPath: localPath,
+		StorageCachePath: cachePath,
+	})
+
+	if cfg.Storage.Type != "overlay" {
+		t.Fatalf("got storage type %q, want overlay", cfg.Storage.Type)
+	}
+	if cfg.Storage.LocalPath != localPath {
+		t.Fatalf("got local path %q, want %q", cfg.Storage.LocalPath, localPath)
+	}
+	if cfg.Storage.CachePath != cachePath {
+		t.Fatalf("got cache path %q, want %q", cfg.Storage.CachePath, cachePath)
+	}
+	if cfg.Storage.Region != "custom-region" {
+		t.Fatalf("got region %q, want custom-region", cfg.Storage.Region)
+	}
+	if cfg.Storage.Bucket != "bucket" {
+		t.Fatalf("got bucket %q, want bucket", cfg.Storage.Bucket)
+	}
+	if cfg.Storage.MaxWidth != 1200 || cfg.Storage.MaxHeight != 900 {
+		t.Fatalf("got max size %dx%d, want 1200x900", cfg.Storage.MaxWidth, cfg.Storage.MaxHeight)
+	}
+}
+
 func TestParseRejectsLocalStorageWithoutPath(t *testing.T) {
 	_, err := Parse(writeConfigText(t, `{
 		"storage": {
@@ -125,6 +241,16 @@ func parseConfigText(t *testing.T, text string) *Config {
 	cfg, err := Parse(writeConfigText(t, text))
 	if err != nil {
 		t.Fatalf("Parse returned an error: %v", err)
+	}
+	return cfg
+}
+
+func parseConfigTextWithOverrides(t *testing.T, text string, overrides Overrides) *Config {
+	t.Helper()
+
+	cfg, err := ParseWithOverrides(writeConfigText(t, text), overrides)
+	if err != nil {
+		t.Fatalf("ParseWithOverrides returned an error: %v", err)
 	}
 	return cfg
 }

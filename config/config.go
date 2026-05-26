@@ -56,8 +56,51 @@ type Config struct {
 	Storage StorageConf `json:"storage"`
 }
 
-func Parse(configFile string) (*Config, error) {
-	cfg := Config{
+// Overrides contains explicit CLI-provided config values.
+type Overrides struct {
+	StorageType      string
+	StorageLocalPath string
+	StorageCachePath string
+}
+
+func Parse(configFile string, overrides ...Overrides) (*Config, error) {
+	if len(overrides) > 1 {
+		return nil, fmt.Errorf("expected at most one config override set, got %d", len(overrides))
+	}
+
+	var override Overrides
+	if len(overrides) == 1 {
+		override = overrides[0]
+	}
+	return ParseWithOverrides(configFile, override)
+}
+
+func ParseWithOverrides(configFile string, overrides Overrides) (*Config, error) {
+	cfg := defaultConfig()
+
+	path, _ := filepath.Abs(configFile)
+
+	text, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config: %s (%w)", path, err)
+	}
+
+	if err := json.Unmarshal(text, &cfg); err != nil {
+		return nil, err
+	}
+
+	applyOverrides(&cfg, overrides)
+	applyDefaults(&cfg)
+
+	if err := validate(&cfg); err != nil {
+		return nil, err
+	}
+
+	return &cfg, nil
+}
+
+func defaultConfig() Config {
+	return Config{
 		Server: ServerConf{
 			BindTo:             "127.0.0.1:8081",
 			MaxClients:         100,
@@ -71,51 +114,56 @@ func Parse(configFile string) (*Config, error) {
 			OutputType:      OutputTypeVary,
 		},
 	}
+}
 
-	path, _ := filepath.Abs(configFile)
-
-	text, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config: %s (%w)", path, err)
+func applyOverrides(cfg *Config, overrides Overrides) {
+	if overrides.StorageType != "" {
+		cfg.Storage.Type = overrides.StorageType
 	}
-
-	if err := json.Unmarshal(text, &cfg); err != nil {
-		return nil, err
+	if overrides.StorageLocalPath != "" {
+		cfg.Storage.LocalPath = overrides.StorageLocalPath
 	}
+	if overrides.StorageCachePath != "" {
+		cfg.Storage.CachePath = overrides.StorageCachePath
+	}
+}
 
+func applyDefaults(cfg *Config) {
 	if cfg.Storage.Type == "" {
 		cfg.Storage.Type = "s3"
 	}
+}
 
+func validate(cfg *Config) error {
 	switch cfg.Storage.Type {
 	case "s3":
 		if err := prepareS3Storage(&cfg.Storage); err != nil {
-			return nil, err
+			return err
 		}
 	case "local":
 		if err := prepareLocalStorage(&cfg.Storage); err != nil {
-			return nil, err
+			return err
 		}
 	case "overlay":
 		if err := prepareLocalStorage(&cfg.Storage); err != nil {
-			return nil, err
+			return err
 		}
 		if err := prepareS3Storage(&cfg.Storage); err != nil {
-			return nil, err
+			return err
 		}
 	default:
-		return nil, fmt.Errorf("unsupported storage.type %q", cfg.Storage.Type)
+		return fmt.Errorf("unsupported storage.type %q", cfg.Storage.Type)
 	}
 
 	if cfg.Server.LogFile != "" {
 		var err error
 		cfg.Server.LogFile, err = filepath.Abs(cfg.Server.LogFile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to process log file path: %s (%w)", cfg.Server.LogFile, err)
+			return fmt.Errorf("failed to process log file path: %s (%w)", cfg.Server.LogFile, err)
 		}
 	}
 
-	return &cfg, nil
+	return nil
 }
 
 func prepareS3Storage(conf *StorageConf) error {

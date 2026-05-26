@@ -19,11 +19,14 @@ import (
 
 const version = "0.1.5"
 
-const help = `usage: imgserv <action>
+const help = `usage: imgserv <action> [options]
+
 actions:
-  server -config=<path to config.json>
-  stat [-config=<path to config.json>]
-  version`
+  server -config=<path>   run HTTP server
+  stat [-config=<path>]   fetch server stats
+  version                 print version
+
+Run "imgserv <action> -h" for action options.`
 
 var (
 	maxSem     *semaphore.Weighted
@@ -33,11 +36,11 @@ var (
 	cfg        *config.Config
 )
 
-func run(cfgPath string) error {
+func run(cfgPath string, overrides config.Overrides) error {
 
 	var err error
 
-	cfg, err = config.Parse(cfgPath)
+	cfg, err = config.ParseWithOverrides(cfgPath, overrides)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -98,10 +101,27 @@ func main() {
 		os.Exit(0)
 	}
 
-	var configArg string
+	var serverConfigArg string
+	var serverOverrides config.Overrides
 	serverCmd := flag.NewFlagSet("server", flag.ExitOnError)
-	serverCmd.StringVar(&configArg, "config", "./config.json", "path to config json file")
-	serverCmd.StringVar(&configArg, "c", "./config.json", "path to config json file (shorthand)")
+	serverCmd.StringVar(&serverConfigArg, "config", "./config.json", "path to config json file")
+	serverCmd.StringVar(&serverConfigArg, "c", "./config.json", "path to config json file (shorthand)")
+	serverCmd.StringVar(&serverOverrides.StorageType, "storage-type", "", "override storage.type")
+	serverCmd.StringVar(&serverOverrides.StorageLocalPath, "storage-local-path", "", "override storage.local_path")
+	serverCmd.StringVar(&serverOverrides.StorageCachePath, "storage-cache-path", "", "override storage.cache_path")
+	serverCmd.Usage = func() {
+		fmt.Fprintf(serverCmd.Output(), "usage: imgserv server -config=<path> [storage overrides]\n\noptions:\n")
+		serverCmd.PrintDefaults()
+	}
+
+	var statConfigArg string
+	statCmd := flag.NewFlagSet("stat", flag.ExitOnError)
+	statCmd.StringVar(&statConfigArg, "config", "./config.json", "path to config json file")
+	statCmd.StringVar(&statConfigArg, "c", "./config.json", "path to config json file (shorthand)")
+	statCmd.Usage = func() {
+		fmt.Fprintf(statCmd.Output(), "usage: imgserv stat [-config=<path>]\n\noptions:\n")
+		statCmd.PrintDefaults()
+	}
 
 	action := os.Args[1]
 
@@ -110,12 +130,12 @@ func main() {
 		fmt.Println(version)
 	case "server":
 		serverCmd.Parse(os.Args[2:])
-		if err := run(configArg); err != nil {
+		if err := run(serverConfigArg, serverOverrides); err != nil {
 			log.Fatal(err)
 		}
 	case "stat":
-		serverCmd.Parse(os.Args[2:])
-		if err := showStats(configArg); err != nil {
+		statCmd.Parse(os.Args[2:])
+		if err := showStats(statConfigArg); err != nil {
 			log.Fatal(err)
 		}
 	default:

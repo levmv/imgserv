@@ -89,33 +89,19 @@ func Parse(configFile string) (*Config, error) {
 
 	switch cfg.Storage.Type {
 	case "s3":
-		if cfg.Storage.Credentials == "" {
-			cfg.Storage.Credentials = ".aws_credentials"
-		}
-		var err error
-		cfg.Storage.Credentials, err = filepath.Abs(cfg.Storage.Credentials)
-		if err != nil {
-			return nil, fmt.Errorf("failed to process storage.credentials path: %s (%w)", cfg.Storage.Credentials, err)
-		}
-		if err := validateReadableFile(cfg.Storage.Credentials, "storage.credentials"); err != nil {
+		if err := prepareS3Storage(&cfg.Storage); err != nil {
 			return nil, err
 		}
-
-		if cfg.Storage.Region == "" {
-			cfg.Storage.Region = "ru-central1"
-		}
-
-		if cfg.Storage.Bucket == "" {
-			return nil, fmt.Errorf("storage.bucket must not be empty")
-		}
 	case "local":
-		if cfg.Storage.LocalPath == "" {
-			return nil, fmt.Errorf("storage.local_path must not be empty")
+		if err := prepareLocalStorage(&cfg.Storage); err != nil {
+			return nil, err
 		}
-		var err error
-		cfg.Storage.LocalPath, err = filepath.Abs(cfg.Storage.LocalPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to process local storage path: %s (%w)", cfg.Storage.LocalPath, err)
+	case "overlay":
+		if err := prepareLocalStorage(&cfg.Storage); err != nil {
+			return nil, err
+		}
+		if err := prepareS3Storage(&cfg.Storage); err != nil {
+			return nil, err
 		}
 	default:
 		return nil, fmt.Errorf("unsupported storage.type %q", cfg.Storage.Type)
@@ -130,6 +116,41 @@ func Parse(configFile string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+func prepareS3Storage(conf *StorageConf) error {
+	if conf.Credentials == "" {
+		conf.Credentials = ".aws_credentials"
+	}
+	var err error
+	conf.Credentials, err = filepath.Abs(conf.Credentials)
+	if err != nil {
+		return fmt.Errorf("failed to process storage.credentials path: %s (%w)", conf.Credentials, err)
+	}
+	if err := validateReadableFile(conf.Credentials, "storage.credentials"); err != nil {
+		return err
+	}
+
+	if conf.Region == "" {
+		conf.Region = "ru-central1"
+	}
+
+	if conf.Bucket == "" {
+		return fmt.Errorf("storage.bucket must not be empty")
+	}
+	return nil
+}
+
+func prepareLocalStorage(conf *StorageConf) error {
+	if conf.LocalPath == "" {
+		return fmt.Errorf("storage.local_path must not be empty")
+	}
+	var err error
+	conf.LocalPath, err = filepath.Abs(conf.LocalPath)
+	if err != nil {
+		return fmt.Errorf("failed to process local storage path: %s (%w)", conf.LocalPath, err)
+	}
+	return nil
 }
 
 func validateReadableFile(path string, name string) error {

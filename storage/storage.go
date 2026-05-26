@@ -63,6 +63,8 @@ func New(conf config.StorageConf) (ImageStorage, error) {
 		return NewCached(conf)
 	case "local":
 		return NewLocal(conf.LocalPath)
+	case "overlay":
+		return NewLocalOverlay(conf)
 	default:
 		return nil, fmt.Errorf("unsupported storage.type %q", conf.Type)
 	}

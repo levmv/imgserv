@@ -24,6 +24,43 @@ func TestParseLocalStorageConfig(t *testing.T) {
 	}
 }
 
+func TestParseOverlayStorageConfig(t *testing.T) {
+	dir := t.TempDir()
+	localPath := filepath.Join(dir, "images")
+	cachePath := filepath.Join(dir, "cache")
+	credentials := filepath.Join(dir, "credentials")
+	writeCredentialsFile(t, credentials)
+
+	cfg := parseConfigText(t, `{
+		"storage": {
+			"type": "overlay",
+			"local_path": `+quote(localPath)+`,
+			"cache_path": `+quote(cachePath)+`,
+			"credentials": `+quote(credentials)+`,
+			"bucket": "bucket"
+		}
+	}`)
+
+	if cfg.Storage.Type != "overlay" {
+		t.Fatalf("got storage type %q, want overlay", cfg.Storage.Type)
+	}
+	if cfg.Storage.LocalPath != localPath {
+		t.Fatalf("got local path %q, want %q", cfg.Storage.LocalPath, localPath)
+	}
+	if cfg.Storage.CachePath != cachePath {
+		t.Fatalf("got cache path %q, want %q", cfg.Storage.CachePath, cachePath)
+	}
+	if cfg.Storage.Credentials != credentials {
+		t.Fatalf("got credentials path %q, want %q", cfg.Storage.Credentials, credentials)
+	}
+	if cfg.Storage.Region != "ru-central1" {
+		t.Fatalf("got region %q, want ru-central1", cfg.Storage.Region)
+	}
+	if cfg.Storage.Bucket != "bucket" {
+		t.Fatalf("got bucket %q, want bucket", cfg.Storage.Bucket)
+	}
+}
+
 func TestParseRejectsLocalStorageWithoutPath(t *testing.T) {
 	_, err := Parse(writeConfigText(t, `{
 		"storage": {

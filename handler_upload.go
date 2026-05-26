@@ -94,11 +94,10 @@ func UploadFileHandler(w http.ResponseWriter, r *http.Request) (int, error) {
 	filename := q.Get("filename")
 
 	file, err := os.Open(filename)
-	defer file.Close()
-
 	if err != nil {
 		return 500, fmt.Errorf("failed to open file %v (%w)", filename, err)
 	}
+	defer file.Close()
 
 	if err := queueSem.Acquire(r.Context(), 1); err != nil {
 		panic("maxSem")

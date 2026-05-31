@@ -154,7 +154,10 @@ func uploadPhoto(name string, r io.Reader) (*UploadedInfo, error) {
 		return nil, err
 	}
 
-	imageBytes, _ := image.ExportJpeg(95)
+	imageBytes, err := image.ExportJpeg(95)
+	if err != nil {
+		return nil, err
+	}
 
 	if err := imgStorage.Upload(name, imageBytes); err != nil {
 		return nil, err

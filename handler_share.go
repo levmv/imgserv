@@ -105,7 +105,7 @@ func serveShareImg(w http.ResponseWriter, r *http.Request) (int, error) {
 	ratio := maxWidth / maxHeight
 	width := int(maxWidth)
 	height := int(maxHeight)
-	if float64(image.Width()/image.Height()) > ratio {
+	if float64(image.Width())/float64(image.Height()) > ratio {
 		if image.Height() < int(maxHeight) {
 			height = image.Height()
 			width = int(float64(image.Height()) * ratio)
@@ -133,7 +133,7 @@ func serveShareImg(w http.ResponseWriter, r *http.Request) (int, error) {
 		return 500, err
 	}
 
-	if err := image.Label(text, cfg.Sharer.Font, cfg.Sharer.FontFile, vips.Color{255, 255, 255},
+	if err := image.Label(text, cfg.Sharer.Font, cfg.Sharer.FontFile, vips.Color{R: 255, G: 255, B: 255},
 		lineH, lineV*3, image.Width()-lineH*2, lineV*3); err != nil {
 		return 500, err
 	}
@@ -157,7 +157,10 @@ func serveShareImg(w http.ResponseWriter, r *http.Request) (int, error) {
 	if preview {
 		quality = 60
 	}
-	imageBytes, _ := image.ExportJpeg(quality)
+	imageBytes, err := image.ExportJpeg(quality)
+	if err != nil {
+		return 500, err
+	}
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Content-Length", strconv.Itoa(len(imageBytes)))
 	_, err = w.Write(imageBytes)

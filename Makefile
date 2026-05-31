@@ -1,7 +1,7 @@
 all: test build
 
 test:
-	go test
+	go test ./...
 
 build:
 	go build -ldflags="-w -s" -o bin/imgserv-linux-amd64

@@ -17,7 +17,7 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-const version = "0.1.5"
+const version = "0.1.6"
 
 const help = `usage: imgserv <action> [options]
 

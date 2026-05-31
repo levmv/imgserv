@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"syscall"
 	"testing"
 )
 
@@ -46,5 +48,19 @@ func TestGenUuidShapeAndUniqueness(t *testing.T) {
 			t.Fatalf("duplicate id generated: %q", id)
 		}
 		seen[id] = true
+	}
+}
+
+func TestIsClientClosedError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if !isClientClosedError(ctx, errors.New("operation error S3: canceled, context canceled")) {
+		t.Fatal("expected canceled request context to be treated as client close")
+	}
+	if !isClientClosedError(context.Background(), syscall.EPIPE) {
+		t.Fatal("expected broken pipe to be treated as client close")
+	}
+	if isClientClosedError(context.Background(), errors.New("s3 timeout")) {
+		t.Fatal("unexpected client close classification")
 	}
 }

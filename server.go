@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/levmv/imgserv/config"
@@ -32,6 +34,9 @@ func serveStat(w http.ResponseWriter, r *http.Request) (int, error) {
 
 func (fn appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if status, err := fn(w, r); err != nil {
+		if status == 499 || isClientClosedError(r.Context(), err) {
+			return
+		}
 		log.Printf("Error %d %v", status, err)
 		if status < http.StatusBadRequest || status > 599 {
 			status = http.StatusInternalServerError
@@ -42,6 +47,23 @@ func (fn appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Error(w, statusText, status)
 	}
+}
+
+func isClientClosedError(ctx context.Context, err error) bool {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return errors.Is(ctxErr, context.Canceled) || errors.Is(ctxErr, context.DeadlineExceeded)
+	}
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, syscall.ECONNRESET) {
+		return true
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "broken pipe") ||
+		strings.Contains(text, "connection reset by peer") ||
+		strings.Contains(text, "request cancelled")
 }
 
 func startServer(cancel context.CancelFunc, conf config.ServerConf) {

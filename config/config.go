@@ -15,6 +15,8 @@ type ServerConf struct {
 	FreeMemoryInterval int    `json:"free_memory_interval"`
 	LogFile            string `json:"log_file"`
 	MemoryLimit        int64  `json:"go_memory_limit"`
+	MaxUploadSize      int64  `json:"max_upload_size"`
+	UploadFileBasePath string `json:"upload_file_base_path"`
 }
 
 type StorageConf struct {
@@ -107,6 +109,7 @@ func defaultConfig() Config {
 			Concurrency:        2,
 			FreeMemoryInterval: 20,
 			MemoryLimit:        80 * 1024 * 1024,
+			MaxUploadSize:      64 * 1024 * 1024,
 		},
 		Resizer: ResizerConf{
 			WebpQCorrection: -2,
@@ -160,6 +163,13 @@ func validate(cfg *Config) error {
 		cfg.Server.LogFile, err = filepath.Abs(cfg.Server.LogFile)
 		if err != nil {
 			return fmt.Errorf("failed to process log file path: %s (%w)", cfg.Server.LogFile, err)
+		}
+	}
+	if cfg.Server.UploadFileBasePath != "" {
+		var err error
+		cfg.Server.UploadFileBasePath, err = filepath.Abs(cfg.Server.UploadFileBasePath)
+		if err != nil {
+			return fmt.Errorf("failed to process upload_file_base_path: %s (%w)", cfg.Server.UploadFileBasePath, err)
 		}
 	}
 

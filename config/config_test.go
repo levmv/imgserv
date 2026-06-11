@@ -235,6 +235,40 @@ func TestParseRejectsMissingS3Credentials(t *testing.T) {
 	}
 }
 
+func TestParseDefaultMaxUploadSize(t *testing.T) {
+	localPath := filepath.Join(t.TempDir(), "images")
+	cfg := parseConfigText(t, `{
+		"storage": {
+			"type": "local",
+			"local_path": `+quote(localPath)+`
+		}
+	}`)
+
+	if cfg.Server.MaxUploadSize != 64*1024*1024 {
+		t.Fatalf("got max upload size %d, want 64 MiB", cfg.Server.MaxUploadSize)
+	}
+}
+
+func TestParseNormalizesUploadFileBasePath(t *testing.T) {
+	dir := t.TempDir()
+	localPath := filepath.Join(dir, "images")
+	t.Chdir(dir)
+
+	cfg := parseConfigText(t, `{
+		"server": {
+			"upload_file_base_path": "uploads"
+		},
+		"storage": {
+			"type": "local",
+			"local_path": `+quote(localPath)+`
+		}
+	}`)
+
+	if cfg.Server.UploadFileBasePath != filepath.Join(dir, "uploads") {
+		t.Fatalf("got upload file base path %q, want absolute path", cfg.Server.UploadFileBasePath)
+	}
+}
+
 func parseConfigText(t *testing.T, text string) *Config {
 	t.Helper()
 

@@ -77,10 +77,9 @@ func TestGetCachedNotFoundSentinel(t *testing.T) {
 	}
 
 	r, err := cs.getCached("missing.jpg")
-	if r == nil {
-		t.Fatal("expected non-nil reader for cached 404 sentinel")
+	if r != nil {
+		t.Fatal("expected nil reader for cached 404 sentinel")
 	}
-	defer r.Close()
 	if !errors.Is(err, NotFoundError) {
 		t.Fatalf("got error %v, want NotFoundError", err)
 	}

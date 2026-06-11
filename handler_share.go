@@ -51,7 +51,7 @@ func serveShareImg(w http.ResponseWriter, r *http.Request) (int, error) {
 
 	IncSharerRequests()
 
-	if inited == false {
+	if !inited {
 		return 501, errors.New("sharer not set")
 	}
 
@@ -64,7 +64,7 @@ func serveShareImg(w http.ResponseWriter, r *http.Request) (int, error) {
 	preview := q.Has("preview") && q.Get("preview") == "1"
 
 	if path == "" || text == "" {
-		return 500, errors.New("empty path or text params")
+		return 400, errors.New("empty path or text params")
 	}
 
 	maxWidth := 1200.0
@@ -78,18 +78,22 @@ func serveShareImg(w http.ResponseWriter, r *http.Request) (int, error) {
 	ctx := r.Context()
 
 	if err := queueSem.Acquire(ctx, 1); err != nil {
-		panic("maxSem")
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return 499, errors.New("request cancelled")
+		}
+		panic("queueSem")
 	}
 	defer queueSem.Release(1)
 
 	sourceImg, err := imgStorage.LoadImage(ctx, path)
-	defer sourceImg.Close()
 	if err != nil {
+		sourceImg.Close()
 		if errors.Is(err, storage.NotFoundError) {
 			return 404, fmt.Errorf("%v %s", err, path)
 		}
 		return 500, err
 	}
+	defer sourceImg.Close()
 
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -100,6 +104,9 @@ func serveShareImg(w http.ResponseWriter, r *http.Request) (int, error) {
 
 	if err = image.LoadFromBuffer(sourceImg.Data); err != nil {
 		return 500, fmt.Errorf("failed to load. %v", err)
+	}
+	if image.Width()*image.Height() > maxSourcePixels {
+		return 500, fmt.Errorf("input image is too big %vx%v", image.Width(), image.Height())
 	}
 
 	ratio := maxWidth / maxHeight
@@ -145,10 +152,14 @@ func serveShareImg(w http.ResponseWriter, r *http.Request) (int, error) {
 		return 500, err
 	}
 	if scale != 1 {
-		logoImage.Resize(scale)
+		if err := logoImage.Resize(scale); err != nil {
+			return 500, err
+		}
 	}
 
-	logoImage.Embed(lineH, lineV, image.Width(), image.Height())
+	if err := logoImage.Embed(lineH, lineV, image.Width(), image.Height()); err != nil {
+		return 500, err
+	}
 	if err = image.Composite(&logoImage); err != nil {
 		return 500, err
 	}
@@ -165,5 +176,5 @@ func serveShareImg(w http.ResponseWriter, r *http.Request) (int, error) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(imageBytes)))
 	_, err = w.Write(imageBytes)
 
-	return 200, nil
+	return 200, err
 }

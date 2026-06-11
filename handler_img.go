@@ -41,7 +41,7 @@ func serveImg(w http.ResponseWriter, r *http.Request) (int, error) {
 
 	path, pms, err := params.Parse(verifiedQuery)
 	if err != nil {
-		return 500, err
+		return 400, err
 	}
 
 	// We're limiting concurrency both for loading file and processing image. Even though it seems logical to separate
@@ -56,13 +56,14 @@ func serveImg(w http.ResponseWriter, r *http.Request) (int, error) {
 	defer queueSem.Release(1)
 
 	sourceImg, err := imgStorage.LoadImage(ctx, path)
-	defer sourceImg.Close()
 	if err != nil {
+		sourceImg.Close()
 		if errors.Is(err, storage.NotFoundError) {
 			return 404, fmt.Errorf("%v %s", err, path)
 		}
 		return 500, err
 	}
+	defer sourceImg.Close()
 
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -73,6 +74,9 @@ func serveImg(w http.ResponseWriter, r *http.Request) (int, error) {
 
 	if err = image.LoadFromBuffer(sourceImg.Data); err != nil {
 		return 500, fmt.Errorf("failed to load %s: %v", verifiedQuery, err)
+	}
+	if image.Width()*image.Height() > maxSourcePixels {
+		return 500, fmt.Errorf("input image is too big %vx%v", image.Width(), image.Height())
 	}
 
 	size := vips.SizeDown
@@ -133,7 +137,9 @@ func serveImg(w http.ResponseWriter, r *http.Request) (int, error) {
 		}
 
 		if pms.Mode == params.ModeFill {
-			image.Flatten(vips.Color{R: 255, G: 255, B: 255}) // fixme
+			if err := image.Flatten(vips.Color{R: 255, G: 255, B: 255}); err != nil {
+				return 500, err
+			}
 			if err := image.EmbedBackground(
 				(finalWidth-image.Width())/2,
 				(finalHeight-image.Height())/2,
@@ -166,11 +172,11 @@ func serveImg(w http.ResponseWriter, r *http.Request) (int, error) {
 
 	exportWebp := func() ([]byte, error) {
 		w.Header().Set("Content-Type", "image/webp")
-		return image.ExportWebp(pms.Quality + cfg.Resizer.WebpQCorrection)
+		return image.ExportWebp(clampQuality(pms.Quality + cfg.Resizer.WebpQCorrection))
 	}
 	exportJpeg := func() ([]byte, error) {
 		w.Header().Set("Content-Type", "image/jpeg")
-		return image.ExportJpeg(pms.Quality + cfg.Resizer.JpegQCorrection)
+		return image.ExportJpeg(clampQuality(pms.Quality + cfg.Resizer.JpegQCorrection))
 	}
 
 	if cfg.Resizer.OutputType == config.OutputTypeVary {
@@ -205,31 +211,49 @@ func addWatermark(image *vips.Image, wmImg *storage.SourceImage, wm params.Water
 	}
 
 	if pixelRatio > 1 {
-		wmImage.Thumbnail(int(float64(wmImage.Width())*pixelRatio), int(float64(wmImage.Height())*pixelRatio), 0, vips.SizeBoth)
+		if err := wmImage.Thumbnail(int(float64(wmImage.Width())*pixelRatio), int(float64(wmImage.Height())*pixelRatio), 0, vips.SizeBoth); err != nil {
+			return err
+		}
 	}
 
 	if wm.Size < 100 {
-		wmImage.Resize(float64(wm.Size) / 100)
+		if err := wmImage.Resize(float64(wm.Size) / 100); err != nil {
+			return err
+		}
 	}
 
+	var err error
 	switch wm.Position { // TODO: rewrite to one embed?
 	case params.PositionNorth:
-		wmImage.Embed(image.Width()/2-wmImage.Width()/2, 0, image.Width(), image.Height())
+		err = wmImage.Embed(image.Width()/2-wmImage.Width()/2, 0, image.Width(), image.Height())
 	case params.PositionSouthEast:
-		wmImage.Embed(image.Width()-wmImage.Width(), image.Height()-wmImage.Height(), image.Width(), image.Height())
+		err = wmImage.Embed(image.Width()-wmImage.Width(), image.Height()-wmImage.Height(), image.Width(), image.Height())
 	case params.PositionSouthWest:
-		wmImage.Embed(0, image.Height()-wmImage.Height(), image.Width(), image.Height())
+		err = wmImage.Embed(0, image.Height()-wmImage.Height(), image.Width(), image.Height())
 	case params.PositionNorthWest:
-		wmImage.Embed(0, 0, image.Width(), image.Height())
+		err = wmImage.Embed(0, 0, image.Width(), image.Height())
 	case params.PositionCenter:
-		wmImage.Embed(image.Width()/2-wmImage.Width()/2, image.Height()/2-wmImage.Height()/2, image.Width(), image.Height())
+		err = wmImage.Embed(image.Width()/2-wmImage.Width()/2, image.Height()/2-wmImage.Height()/2, image.Width(), image.Height())
 	case params.PositionCoords:
 		x := image.Width() - wmImage.Width() - int(float64(wm.PositionX)*pixelRatio)
 		y := image.Height() - wmImage.Height() - int(float64(wm.PositionY)*pixelRatio)
-		wmImage.Embed(x, y, image.Width(), image.Height())
+		err = wmImage.Embed(x, y, image.Width(), image.Height())
+	}
+	if err != nil {
+		return err
 	}
 	if err := image.Composite(&wmImage); err != nil {
 		return err
 	}
 	return nil
+}
+
+func clampQuality(quality int) int {
+	if quality < 1 {
+		return 1
+	}
+	if quality > 100 {
+		return 100
+	}
+	return quality
 }

@@ -12,7 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	time2 "time"
+	"time"
 
 	"github.com/levmv/imgserv/config"
 )
@@ -146,6 +146,7 @@ func (cs *Cached) readImage(ctx context.Context, path string, si *SourceImage) e
 
 	r, err := cs.getCached(path)
 	if err == nil {
+		defer r.Close()
 		_, err = si.ReadFrom(r)
 		return err
 	}
@@ -183,17 +184,19 @@ func (cs *Cached) getCached(path string) (io.ReadCloser, error) {
 		}
 		return nil, err
 	}
-	curTime := time2.Now().Local()
+	curTime := time.Now().Local()
 	_ = os.Chtimes(cachePath, curTime, curTime)
 
 	if info, err := r.Stat(); err == nil {
 		if info.Size() == 3 {
 			var c = make([]byte, 3)
 			if _, err := r.Read(c); err != nil {
+				r.Close()
 				return r, err
 			}
 			if string(c) == "404" {
-				return r, NotFoundError
+				r.Close()
+				return nil, NotFoundError
 			}
 		}
 	}

@@ -101,7 +101,7 @@ func startServer(cancel context.CancelFunc, conf config.ServerConf) {
 func DeleteHandler(w http.ResponseWriter, r *http.Request) (int, error) {
 	key := r.URL.Query().Get("key")
 	if key == "" {
-		return 500, errors.New("empty key arg")
+		return 400, errors.New("empty key arg")
 	}
 
 	if err := imgStorage.Delete(key); err != nil {

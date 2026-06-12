@@ -66,9 +66,15 @@ func TestParseWithOverridesChangesOnlyRequestedFields(t *testing.T) {
 	credentials := filepath.Join(dir, "credentials")
 	oldCachePath := filepath.Join(dir, "old-cache")
 	newCachePath := filepath.Join(dir, "new-cache")
+	oldBindTo := "127.0.0.1:8081"
+	newBindTo := "127.0.0.1:18081"
 	writeCredentialsFile(t, credentials)
 
 	cfg := parseConfigTextWithOverrides(t, `{
+		"server": {
+			"bind_to": `+quote(oldBindTo)+`,
+			"max_clients": 42
+		},
 		"resizer": {
 			"output_format": "webp"
 		},
@@ -82,9 +88,16 @@ func TestParseWithOverridesChangesOnlyRequestedFields(t *testing.T) {
 			"max_height": 900
 		}
 	}`, Overrides{
+		BindTo:           newBindTo,
 		StorageCachePath: newCachePath,
 	})
 
+	if cfg.Server.BindTo != newBindTo {
+		t.Fatalf("got bind address %q, want %q", cfg.Server.BindTo, newBindTo)
+	}
+	if cfg.Server.MaxClients != 42 {
+		t.Fatalf("got max clients %d, want 42", cfg.Server.MaxClients)
+	}
 	if cfg.Storage.Type != "s3" {
 		t.Fatalf("got storage type %q, want s3", cfg.Storage.Type)
 	}

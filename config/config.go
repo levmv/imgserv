@@ -60,6 +60,7 @@ type Config struct {
 
 // Overrides contains explicit CLI-provided config values.
 type Overrides struct {
+	BindTo           string
 	StorageType      string
 	StorageLocalPath string
 	StorageCachePath string
@@ -120,6 +121,9 @@ func defaultConfig() Config {
 }
 
 func applyOverrides(cfg *Config, overrides Overrides) {
+	if overrides.BindTo != "" {
+		cfg.Server.BindTo = overrides.BindTo
+	}
 	if overrides.StorageType != "" {
 		cfg.Storage.Type = overrides.StorageType
 	}

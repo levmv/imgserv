@@ -17,7 +17,7 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-const version = "0.1.6"
+const version = "0.1.7"
 
 const help = `usage: imgserv <action> [options]
 
@@ -106,6 +106,7 @@ func main() {
 	serverCmd := flag.NewFlagSet("server", flag.ExitOnError)
 	serverCmd.StringVar(&serverConfigArg, "config", "./config.json", "path to config json file")
 	serverCmd.StringVar(&serverConfigArg, "c", "./config.json", "path to config json file (shorthand)")
+	serverCmd.StringVar(&serverOverrides.BindTo, "bind", "", "override server.bind_to")
 	serverCmd.StringVar(&serverOverrides.StorageType, "storage-type", "", "override storage.type")
 	serverCmd.StringVar(&serverOverrides.StorageLocalPath, "storage-local-path", "", "override storage.local_path")
 	serverCmd.StringVar(&serverOverrides.StorageCachePath, "storage-cache-path", "", "override storage.cache_path")

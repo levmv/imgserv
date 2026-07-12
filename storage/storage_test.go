@@ -268,6 +268,25 @@ func TestCacheWriteSchedulesCleanupAfterGrowthThreshold(t *testing.T) {
 	}
 }
 
+func TestFormatCacheBytes(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		size int64
+		want string
+	}{
+		{name: "bytes", size: 512, want: "512 B"},
+		{name: "kibibytes", size: 1536, want: "2 KiB"},
+		{name: "mebibytes", size: 804463382, want: "767 MiB"},
+		{name: "gibibytes", size: 4494608825, want: "4.19 GiB"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := formatCacheBytes(test.size); got != test.want {
+				t.Fatalf("formatCacheBytes(%d) = %q, want %q", test.size, got, test.want)
+			}
+		})
+	}
+}
+
 func TestCacheReadWriteAndCleanupAreConcurrentSafe(t *testing.T) {
 	cs := newTestCache(t)
 	first := []byte(strings.Repeat("a", 4096))

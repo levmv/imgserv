@@ -39,7 +39,6 @@ type cacheEntry struct {
 type cacheCleanupStats struct {
 	Scanned      int
 	Removed      int
-	BytesBefore  int64
 	BytesRemoved int64
 	BytesAfter   int64
 }
@@ -87,16 +86,33 @@ func (cs *Cached) runCacheCleanup(reason string) {
 	}
 	if stats.Removed > 0 {
 		log.Printf(
-			"storage cache cleanup reason=%s path=%q scanned=%d removed=%d bytes_before=%d bytes_removed=%d bytes_after=%d duration=%s",
+			"cache cleanup %s: removed %d/%d files, freed %s, %s remain (%s)",
 			reason,
-			cs.basePath,
-			stats.Scanned,
 			stats.Removed,
-			stats.BytesBefore,
-			stats.BytesRemoved,
-			stats.BytesAfter,
+			stats.Scanned,
+			formatCacheBytes(stats.BytesRemoved),
+			formatCacheBytes(stats.BytesAfter),
 			time.Since(started).Round(time.Millisecond),
 		)
+	}
+}
+
+func formatCacheBytes(size int64) string {
+	const (
+		kib = 1 << 10
+		mib = 1 << 20
+		gib = 1 << 30
+	)
+
+	switch {
+	case size >= gib:
+		return fmt.Sprintf("%.2f GiB", float64(size)/gib)
+	case size >= mib:
+		return fmt.Sprintf("%.0f MiB", float64(size)/mib)
+	case size >= kib:
+		return fmt.Sprintf("%.0f KiB", float64(size)/kib)
+	default:
+		return fmt.Sprintf("%d B", size)
 	}
 }
 
@@ -132,7 +148,6 @@ func (cs *Cached) cleanupCacheWithLimits(now time.Time, maxBytes int64, lowWater
 		}
 
 		stats.Scanned++
-		stats.BytesBefore += info.Size()
 		stats.BytesAfter += info.Size()
 
 		age := now.Sub(info.ModTime())

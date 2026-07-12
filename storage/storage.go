@@ -31,6 +31,7 @@ type Cached struct {
 	s3       S3Storage
 	pool     *sync.Pool
 	basePath string
+	janitor  *cacheJanitor
 }
 
 func NewCached(conf config.StorageConf) (*Cached, error) {
@@ -53,6 +54,7 @@ func NewCached(conf config.StorageConf) (*Cached, error) {
 			},
 		},
 	}
+	cs.startCacheJanitor()
 
 	return &cs, nil
 }
@@ -157,7 +159,7 @@ func (cs *Cached) readImage(ctx context.Context, path string, si *SourceImage) e
 	r, err = cs.s3.Open(ctx, path)
 	if err != nil {
 		if errors.Is(err, NotFoundError) {
-			if cerr := cs.cacheFile(path, []byte("404")); cerr != nil {
+			if cerr := cs.cacheFile(path, []byte(negativeCacheContents)); cerr != nil {
 				err = cerr
 			}
 		}
@@ -184,24 +186,34 @@ func (cs *Cached) getCached(path string) (io.ReadCloser, error) {
 		}
 		return nil, err
 	}
-	curTime := time.Now().Local()
-	_ = os.Chtimes(cachePath, curTime, curTime)
+	info, err := r.Stat()
+	if err != nil {
+		r.Close()
+		return nil, err
+	}
 
-	if info, err := r.Stat(); err == nil {
-		if info.Size() == 3 {
-			var c = make([]byte, 3)
-			if _, err := r.Read(c); err != nil {
-				r.Close()
-				return r, err
+	if info.Size() == int64(len(negativeCacheContents)) {
+		contents := make([]byte, len(negativeCacheContents))
+		if _, err := r.ReadAt(contents, 0); err != nil {
+			r.Close()
+			return nil, err
+		}
+		if string(contents) == negativeCacheContents {
+			r.Close()
+			if time.Since(info.ModTime()) >= negativeCacheTTL {
+				if err := os.Remove(cachePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+					return nil, err
+				}
+				return nil, NotCached
 			}
-			if string(c) == "404" {
-				r.Close()
-				return nil, NotFoundError
-			}
+			return nil, NotFoundError
 		}
 	}
 
-	return r, err
+	curTime := time.Now()
+	_ = os.Chtimes(cachePath, curTime, curTime)
+
+	return r, nil
 }
 
 func (cs *Cached) cacheFile(path string, data []byte) error {
@@ -217,7 +229,11 @@ func (cs *Cached) cacheFile(path string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	defer tempFile.Close()
+	tempPath := tempFile.Name()
+	defer func() {
+		tempFile.Close()
+		_ = os.Remove(tempPath)
+	}()
 
 	if _, err = tempFile.Write(data); err != nil {
 		return err
@@ -230,6 +246,7 @@ func (cs *Cached) cacheFile(path string, data []byte) error {
 	if err = os.Rename(tempFile.Name(), path); err != nil {
 		return err
 	}
+	cs.noteCacheWrite(int64(len(data)))
 	return nil
 }
 

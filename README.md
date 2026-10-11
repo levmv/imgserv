@@ -20,10 +20,10 @@ Install it with `sudo systemctl enable imgserv --now`
 The S3 original cache at `storage.cache_path` maintains itself and needs no
 size or TTL configuration:
 
-- positive entries expire after six hours without a cache hit;
+- positive entries expire after seven days without a cache hit;
 - cached `404` responses expire after 30 minutes and hits do not extend them;
 - temporary cache files expire after one hour;
-- 1 GiB is a soft ceiling; when cleanup observes usage above it,
+- 4 GiB is a soft ceiling; when cleanup observes usage above it,
   least-recently-used entries are removed until usage is at or below 75
   percent, so the cache can briefly exceed the ceiling between cleanup runs;
 - cleanup runs on startup, every 30 minutes, and after each 64 MiB of cache

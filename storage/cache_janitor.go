@@ -15,10 +15,10 @@ import (
 )
 
 const (
-	cacheMaxBytes           int64 = 1 << 30
+	cacheMaxBytes           int64 = 4 << 30
 	cacheLowWaterBytes            = cacheMaxBytes * 3 / 4
 	cacheCleanupGrowthBytes int64 = 64 << 20
-	cacheInactiveTTL              = 6 * time.Hour
+	cacheInactiveTTL              = 7 * 24 * time.Hour
 	negativeCacheTTL              = 30 * time.Minute
 	temporaryCacheFileTTL         = time.Hour
 	cacheCleanupInterval          = 30 * time.Minute

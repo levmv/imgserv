@@ -14,6 +14,8 @@ Note: it's basically my first time code in golang, so, code quality is not good 
 
 Requires Go (see [go.mod](go.mod)), libvips headers and pkg-config.
 `make test`; `make build`; `imgserv server -config config.json`.
+`make build` embeds the Git tag (without `v`) or commit, plus `-dirty` for
+uncommitted changes; plain `go build` reports `dev`.
 CLI overrides: `imgserv server -h`. Statistics: `imgserv stat -config config.json`.
 JSON fields and defaults: [config/config.go](config/config.go).
 Relative paths resolve from the working directory.

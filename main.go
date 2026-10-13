@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -42,12 +43,12 @@ func run(cfgPath string, overrides config.Overrides) error {
 
 	cfg, err = config.ParseWithOverrides(cfgPath, overrides)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	if cfg.Resizer.Presets != nil {
 		if err = params.InitPresets(string(cfg.Resizer.Presets)); err != nil {
-			log.Fatal(err)
+			return err
 		}
 	}
 	if cfg.Server.MemoryLimit > 0 {
@@ -57,7 +58,7 @@ func run(cfgPath string, overrides config.Overrides) error {
 	if cfg.Server.LogFile != "" {
 		file, err := os.OpenFile(cfg.Server.LogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 		log.SetOutput(file)
 	}
@@ -65,34 +66,38 @@ func run(cfgPath string, overrides config.Overrides) error {
 	sign = NewUrlSignature(cfg.Resizer.SignatureMethod, cfg.Resizer.SignatureSecret)
 
 	if err = vips.Init(nil); err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer vips.Shutdown()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(stop)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	imgStorage, err = storage.New(cfg.Storage)
 	if err != nil {
-		log.Fatalf("Fail to init storage: %v", err)
+		return fmt.Errorf("init storage: %w", err)
 	}
 
 	initUpload(cfg.Storage)
 	if cfg.Sharer != nil {
 		if err = initSharer(ctx, cfg.Sharer); err != nil {
-			log.Fatalf("Fail to init sharer: %v", err)
+			return fmt.Errorf("init sharer: %w", err)
 		}
 	}
 
-	startServer(cancel, cfg.Server)
+	server, serverErrors := startServer(ctx, cfg.Server)
 
 	select {
-	case <-ctx.Done():
+	case err = <-serverErrors:
 	case <-stop:
 	}
-	return nil
+	// Keep libvips alive until every handler finishes; a second signal forces exit.
+	signal.Stop(stop)
+	return errors.Join(err, server.Shutdown(context.Background()))
 }
 
 func main() {

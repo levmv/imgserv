@@ -2,60 +2,51 @@ package main
 
 import (
 	"fmt"
-	config2 "github.com/levmv/imgserv/config"
-	"github.com/levmv/imgserv/vips"
 	"io"
-	"log"
 	"math"
 	"net/http"
 	"runtime"
 	"sync/atomic"
 	"time"
+
+	"github.com/levmv/imgserv/config"
+	"github.com/levmv/imgserv/vips"
 )
 
 var (
-	resizerRequests    uint64
-	sharerRequests     uint64
-	uploaderRequests   uint64
-	totalRequests      uint64
-	rejectedRequests   uint64
-	requestsInProgress int32
+	resizerRequests    atomic.Uint64
+	sharerRequests     atomic.Uint64
+	uploaderRequests   atomic.Uint64
+	rejectedRequests   atomic.Uint64
+	requestsInProgress atomic.Int32
 )
 
 func IncResizerRequests() {
-	atomic.AddUint64(&resizerRequests, 1)
+	resizerRequests.Add(1)
 }
 
 func IncSharerRequests() {
-	atomic.AddUint64(&sharerRequests, 1)
+	sharerRequests.Add(1)
 }
 
 func IncUploaderRequests() {
-	atomic.AddUint64(&uploaderRequests, 1)
-}
-
-func IncTotalRequests() {
-	atomic.AddUint64(&totalRequests, 1)
+	uploaderRequests.Add(1)
 }
 
 func IncRejectedRequests() {
-	atomic.AddUint64(&rejectedRequests, 1)
+	rejectedRequests.Add(1)
 }
 
 func IncRequestsInProgress() int32 {
-	return atomic.AddInt32(&requestsInProgress, 1)
+	return requestsInProgress.Add(1)
 }
 
 func DecRequestsInProgress() {
-	atomic.AddInt32(&requestsInProgress, -1)
-}
-
-func TotalRequests() uint64 {
-	return atomic.LoadUint64(&totalRequests)
+	requestsInProgress.Add(-1)
 }
 
 func RequestsInProgress() int32 {
-	return atomic.LoadInt32(&requestsInProgress)
+	return requestsInProgress.Load()
 }
 
 type stats struct {
@@ -83,10 +74,10 @@ type stats struct {
 func newStats() stats {
 
 	curStats := stats{
-		Resized:       resizerRequests,
-		Shares:        sharerRequests,
-		Uploaded:      uploaderRequests,
-		Rejected:      rejectedRequests,
+		Resized:       resizerRequests.Load(),
+		Shares:        sharerRequests.Load(),
+		Uploaded:      uploaderRequests.Load(),
+		Rejected:      rejectedRequests.Load(),
 		ReqInProgress: RequestsInProgress(),
 	}
 
@@ -111,10 +102,10 @@ func newStats() stats {
 	return curStats
 }
 
-func showStats(config string) error {
-	cfg, err := config2.Parse(config)
+func showStats(configPath string) error {
+	cfg, err := config.Parse(configPath)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	resp, err := http.Get("http://" + cfg.Server.BindTo + "/stat")

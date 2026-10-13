@@ -66,7 +66,7 @@ func isClientClosedError(ctx context.Context, err error) bool {
 		strings.Contains(text, "request cancelled")
 }
 
-func startServer(cancel context.CancelFunc, conf config.ServerConf) {
+func startServer(ctx context.Context, conf config.ServerConf) (*http.Server, <-chan error) {
 
 	maxSem = semaphore.NewWeighted(int64(conf.MaxClients))
 	queueSem = semaphore.NewWeighted(int64(conf.Concurrency))
@@ -74,28 +74,36 @@ func startServer(cancel context.CancelFunc, conf config.ServerConf) {
 	go func() {
 		ticker := time.NewTicker(time.Duration(conf.FreeMemoryInterval) * time.Second)
 		defer ticker.Stop()
-		for range ticker.C {
-			Free()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				Free()
+			}
 		}
 	}()
 
-	http.Handle("/", appHandler(serveImg))
-	http.Handle("/share", appHandler(serveShareImg))
-	http.Handle("/upload", appHandler(UploadHandler))
-	http.Handle("/upload_file", appHandler(UploadFileHandler))
-	http.Handle("/delete", appHandler(DeleteHandler))
-	http.Handle("/stat", appHandler(serveStat))
-	http.HandleFunc("/favicon.ico", http.NotFound)
+	mux := http.NewServeMux()
+	mux.Handle("/", appHandler(serveImg))
+	mux.Handle("/share", appHandler(serveShareImg))
+	mux.Handle("/upload", appHandler(UploadHandler))
+	mux.Handle("/upload_file", appHandler(UploadFileHandler))
+	mux.Handle("/delete", appHandler(DeleteHandler))
+	mux.Handle("/stat", appHandler(serveStat))
+	mux.HandleFunc("/favicon.ico", http.NotFound)
+	server := &http.Server{
+		Addr:              conf.BindTo,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       time.Minute,
+	}
 
 	log.Printf("Starting server on %s", conf.BindTo)
 
-	go func() {
-		err := http.ListenAndServe(conf.BindTo, nil)
-		if err != nil {
-			log.Fatal(err)
-		}
-		cancel()
-	}()
+	serverErrors := make(chan error, 1)
+	go func() { serverErrors <- server.ListenAndServe() }()
+	return server, serverErrors
 }
 
 func DeleteHandler(w http.ResponseWriter, r *http.Request) (int, error) {

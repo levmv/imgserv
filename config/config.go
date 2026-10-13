@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 )
@@ -23,6 +24,7 @@ type StorageConf struct {
 	Credentials string `json:"credentials"`
 	Type        string `json:"type"`
 	Region      string `json:"region"`
+	Endpoint    string `json:"endpoint"`
 	Bucket      string `json:"bucket"`
 	CachePath   string `json:"cache_path"`
 	LocalPath   string `json:"local_path"`
@@ -181,6 +183,15 @@ func validate(cfg *Config) error {
 }
 
 func prepareS3Storage(conf *StorageConf) error {
+	if conf.Endpoint != "" {
+		endpoint, err := url.Parse(conf.Endpoint)
+		if err != nil || (endpoint.Scheme != "http" && endpoint.Scheme != "https") ||
+			endpoint.Hostname() == "" || endpoint.User != nil ||
+			endpoint.RawQuery != "" || endpoint.ForceQuery || endpoint.Fragment != "" {
+			return fmt.Errorf("storage.endpoint must be an absolute HTTP(S) URL without credentials, query or fragment")
+		}
+	}
+
 	if conf.Credentials == "" {
 		conf.Credentials = ".aws_credentials"
 	}

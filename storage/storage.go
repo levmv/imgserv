@@ -40,7 +40,7 @@ func NewCached(conf config.StorageConf) (*Cached, error) {
 		return nil, err
 	}
 
-	st, err := NewS3Storage(conf.Bucket, conf.Credentials, conf.Region)
+	st, err := NewS3Storage(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +251,13 @@ func (cs *Cached) cacheFile(path string, data []byte) error {
 }
 
 func (cs *Cached) hashName(path string) string {
-	hash := md5.Sum([]byte(cs.s3.Bucket + path))
+	key := cs.s3.Bucket + path
+	if cs.s3.Endpoint != "" {
+		// Different providers can have the same bucket and object names.
+		// Keep the existing cache keys for configs without an explicit endpoint.
+		key = cs.s3.Endpoint + "\x00" + key
+	}
+	hash := md5.Sum([]byte(key))
 	hashed := hex.EncodeToString(hash[:])
 	prefix := hashed[:2]
 

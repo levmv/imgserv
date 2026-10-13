@@ -7,64 +7,67 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/levmv/imgserv/config"
 )
 
 var NotFoundError = errors.New("file not found")
 
 type S3Storage struct {
-	Bucket string
-	client *s3.Client
+	Bucket   string
+	Endpoint string
+	client   *s3.Client
 }
 
-func NewS3Storage(bucket string, credentialsFile string, region string) (S3Storage, error) {
+func NewS3Storage(storageConf config.StorageConf) (S3Storage, error) {
 
 	f := S3Storage{
-		Bucket: bucket,
+		Bucket:   storageConf.Bucket,
+		Endpoint: storageConf.Endpoint,
 	}
 	ctx := context.TODO()
 
-	// Creating a custom endpoint resolver for returning correct URL for S3 storage in the ru-central1 region
-	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, requestedRegion string, options ...interface{}) (aws.Endpoint, error) {
-		if service == s3.ServiceID && requestedRegion == "ru-central1" {
-			return aws.Endpoint{
-				PartitionID:   "yc",
-				URL:           "https://storage.yandexcloud.net",
-				SigningRegion: "ru-central1",
-			}, nil
-		}
-		return aws.Endpoint{}, &aws.EndpointNotFoundError{Err: fmt.Errorf("unknown endpoint requested")}
-	})
+	endpoint := storageConf.Endpoint
+	if endpoint == "" && storageConf.Region == "ru-central1" {
+		// Existing configurations select Yandex by region alone.
+		endpoint = "https://storage.yandexcloud.net"
+	}
 
 	sharedConfig, err := awsconfig.LoadSharedConfigProfile(ctx, "default", func(o *awsconfig.LoadSharedConfigOptions) {
 		o.ConfigFiles = []string{}
-		o.CredentialsFiles = []string{credentialsFile}
+		o.CredentialsFiles = []string{storageConf.Credentials}
 	})
 	if err != nil {
-		return f, fmt.Errorf("failed to load S3 credentials from %s: %w", credentialsFile, err)
+		return f, fmt.Errorf("failed to load S3 credentials from %s: %w", storageConf.Credentials, err)
 	}
 	if !sharedConfig.Credentials.HasKeys() {
-		return f, fmt.Errorf("failed to load S3 credentials from %s: default profile must contain aws_access_key_id and aws_secret_access_key", credentialsFile)
+		return f, fmt.Errorf("failed to load S3 credentials from %s: default profile must contain aws_access_key_id and aws_secret_access_key", storageConf.Credentials)
 	}
 
 	conf, err := awsconfig.LoadDefaultConfig(ctx,
 		awsconfig.WithCredentialsProvider(credentials.StaticCredentialsProvider{
 			Value: sharedConfig.Credentials,
 		}),
-		awsconfig.WithRegion(region),
-		awsconfig.WithEndpointResolverWithOptions(customResolver),
+		awsconfig.WithRegion(storageConf.Region),
 	)
 	if err != nil {
 		return f, err
 	}
 
-	f.client = s3.NewFromConfig(conf)
-	log.Printf("Configured S3 storage bucket=%q region=%q credentials=%q credentials_source=%q", bucket, region, credentialsFile, sharedConfig.Credentials.Source)
+	f.client = s3.NewFromConfig(conf, func(options *s3.Options) {
+		if endpoint != "" {
+			options.BaseEndpoint = aws.String(endpoint)
+		}
+		// Dotted bucket names cannot use the storage wildcard certificate.
+		options.UsePathStyle = strings.Contains(storageConf.Bucket, ".")
+	})
+	log.Printf("Configured S3 storage bucket=%q region=%q endpoint=%q credentials=%q credentials_source=%q", storageConf.Bucket, storageConf.Region, endpoint, storageConf.Credentials, sharedConfig.Credentials.Source)
 
 	return f, nil
 }

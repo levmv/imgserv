@@ -160,6 +160,7 @@ func TestParseWithOverridesCanTurnS3ConfigIntoOverlay(t *testing.T) {
 			"type": "s3",
 			"credentials": `+quote(credentials)+`,
 			"region": "custom-region",
+			"endpoint": "https://storage.example.test",
 			"bucket": "bucket",
 			"max_width": 1200,
 			"max_height": 900
@@ -181,6 +182,9 @@ func TestParseWithOverridesCanTurnS3ConfigIntoOverlay(t *testing.T) {
 	}
 	if cfg.Storage.Region != "custom-region" {
 		t.Fatalf("got region %q, want custom-region", cfg.Storage.Region)
+	}
+	if cfg.Storage.Endpoint != "https://storage.example.test" {
+		t.Fatalf("got endpoint %q, want it preserved in overlay mode", cfg.Storage.Endpoint)
 	}
 	if cfg.Storage.Bucket != "bucket" {
 		t.Fatalf("got bucket %q, want bucket", cfg.Storage.Bucket)
@@ -245,6 +249,29 @@ func TestParseRejectsMissingS3Credentials(t *testing.T) {
 	}`))
 	if err == nil || !strings.Contains(err.Error(), "storage.credentials") {
 		t.Fatalf("got error %v, want storage.credentials validation", err)
+	}
+}
+
+func TestParseRejectsInvalidS3Endpoint(t *testing.T) {
+	credentials := filepath.Join(t.TempDir(), "credentials")
+	writeCredentialsFile(t, credentials)
+	for _, endpoint := range []string{
+		"s3.ru-6.storage.selcloud.ru",
+		"https://user:password@storage.example.test",
+		"https://storage.example.test?query=value",
+	} {
+		t.Run(endpoint, func(t *testing.T) {
+			_, err := Parse(writeConfigText(t, `{
+				"storage": {
+					"credentials": `+quote(credentials)+`,
+					"bucket": "bucket",
+					"endpoint": `+quote(endpoint)+`
+				}
+			}`))
+			if err == nil || !strings.Contains(err.Error(), "storage.endpoint") {
+				t.Fatalf("got error %v, want storage.endpoint validation", err)
+			}
+		})
 	}
 }
 

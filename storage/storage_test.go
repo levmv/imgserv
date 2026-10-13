@@ -6,12 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/levmv/imgserv/config"
 )
 
 func TestInitCachePathRequiresNonEmptyPath(t *testing.T) {
@@ -380,18 +384,48 @@ func TestLoadImageRejectsEmptyCachedFile(t *testing.T) {
 func TestHashNameDependsOnBucketAndPath(t *testing.T) {
 	cs := newTestCache(t)
 	other := newTestCache(t)
+	other.basePath = cs.basePath
 	other.s3.Bucket = "other-bucket"
 
 	first := cs.hashName("same/path")
-	second := cs.hashName("same/path")
-	if first != second {
-		t.Fatalf("hashName is not stable: %q != %q", first, second)
-	}
 	if first == cs.hashName("different/path") {
 		t.Fatal("hashName should differ for different paths")
 	}
 	if first == other.hashName("same/path") {
 		t.Fatal("hashName should differ for different buckets")
+	}
+}
+
+func TestCacheSeparatesS3Endpoints(t *testing.T) {
+	old := newTestCache(t)
+	if err := old.cacheFile("photo.jpg", []byte("old photo")); err != nil {
+		t.Fatal(err)
+	}
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/test-bucket/photo.jpg" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		io.WriteString(w, "new photo")
+	}))
+	defer remote.Close()
+	next, err := NewCached(config.StorageConf{
+		Bucket: old.s3.Bucket, Credentials: writeTestS3Credentials(t),
+		Region: "ru-6", Endpoint: remote.URL, CachePath: old.basePath,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	image, err := next.LoadImage(ctx, "photo.jpg")
+	defer image.Close()
+	if err != nil || string(image.Data) != "new photo" {
+		t.Fatalf("new endpoint image = %q, error = %v; want new photo", image.Data, err)
+	}
+	previous, err := old.LoadImage(ctx, "photo.jpg")
+	defer previous.Close()
+	if err != nil || string(previous.Data) != "old photo" {
+		t.Fatalf("old endpoint image = %q, error = %v; want old photo", previous.Data, err)
 	}
 }
 

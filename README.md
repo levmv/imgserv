@@ -10,26 +10,29 @@ Resizer-part is almost drop-in replacement for `php-resizer` (so it's reimplemen
 
 Note: it's basically my first time code in golang, so, code quality is not good :)
 
-### Service setup
+### Development and usage
 
-Copy and edit `imgserv.service` to `/etc/systemd/system/imgserv.service`
-Install it with `sudo systemctl enable imgserv --now`
+Requires Go (see [go.mod](go.mod)), libvips headers and pkg-config.
+`make test`; `make build`; `imgserv server -config config.json`.
+CLI overrides: `imgserv server -h`. Statistics: `imgserv stat -config config.json`.
+JSON fields and defaults: [config/config.go](config/config.go).
+Relative paths resolve from the working directory.
 
-### Disk cache policy
+### Behavior
 
-The S3 original cache at `storage.cache_path` maintains itself and needs no
-size or TTL configuration:
-
-- positive entries expire after seven days without a cache hit;
-- cached `404` responses expire after 30 minutes and hits do not extend them;
-- temporary cache files expire after one hour;
-- 4 GiB is a soft ceiling; when cleanup observes usage above it,
-  least-recently-used entries are removed until usage is at or below 75
-  percent, so the cache can briefly exceed the ceiling between cleanup runs;
-- cleanup runs on startup, every 30 minutes, and after each 64 MiB of cache
-  growth.
-
-Positive cache hits update file modification time, so the size cleanup keeps
-recently used originals. Cleanup uses atomic cache-file renames and can safely
-run while images are being served.
-
+- Image URLs are `/<params>/<key>`: resize, crop, watermarks and presets are
+  defined in [params/params.go](params/params.go). Output defaults to JPEG/WebP
+  negotiation; proxy caches must respect `Vary: Accept`.
+- `/upload` accepts raw image bytes; `/upload_file` reads a server-side file.
+  Both normalize orientation, optionally shrink, strip metadata and store JPEG.
+  `/delete?key=...` removes an original; `/share?key=...&text=...` generates a
+  social preview with the configured `sharer` font and logo.
+- The HTTP API assumes trusted callers. Image URL signatures do not protect
+  upload/delete routes; legacy `st3` only strips a prefix already checked by nginx.
+- Storage modes: `s3` (default), `local`, `overlay`. Overlay reads local first,
+  falls back to S3, and keeps all writes/deletes local.
+- S3 `endpoint` is a service URL without the bucket; `region` controls signing.
+  Without an endpoint, `ru-central1` selects Yandex; other regions use AWS.
+  Credentials use the `[default]` profile in an AWS shared credentials file.
+- S3 caches originals and misses locally; cleanup is automatic.
+  Policy constants live in [storage/cache_janitor.go](storage/cache_janitor.go).
